@@ -1,0 +1,111 @@
+{
+  "projectType": "saas",
+  "projectName": "VITACORE",
+  "projectDescription": "A web-based electronic health record (EHR) platform for managing patients, clinical evolutions, vital signs, and medical staff, built with Flask and Supabase.",
+  "theme": "linden",
+  "primaryColor": "#1a6fbf",
+  "lightColor": "#e8f1fb",
+  "darkColor": "#0d3d6e",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/patients",
+              "features/clinical-evolutions",
+              "features/vital-signs",
+              "features/dashboard"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "admin/users-roles",
+              "admin/permissions",
+              "admin/professionals",
+              "admin/configuration"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/supabase"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Routes",
+            "pages": [
+              "reference/auth-routes",
+              "reference/patient-routes",
+              "reference/evolution-routes",
+              "reference/vitals-routes",
+              "reference/configuration-routes"
+            ]
+          },
+          {
+            "group": "Data & Repositories",
+            "pages": [
+              "reference/data-models",
+              "reference/repositories"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Patient management with full demographic data (CRUD + active/inactive toggle)",
+    "Clinical evolutions (consultation notes: reason, current illness, physical exam, diagnosis, plan)",
+    "Vital signs recording with automatic BMI calculation (weight, height, blood pressure, heart rate, respiratory rate, temperature)",
+    "Role-based access control with granular per-route permissions (view, create, edit, delete)",
+    "User management with Supabase Auth integration",
+    "Medical professional registry with specialty, sede, and office assignment",
+    "Clinic configuration: sedes (branches), consultorios (offices), especialidades, servicios, tipos de documento, paises",
+    "Supabase-backed persistence with public and admin client separation",
+    "Session-based authentication with username/email lookup"
+  ],
+  "publicApiSurface": [
+    "GET/POST /auth/login",
+    "GET /auth/logout",
+    "GET /hc/ — Dashboard",
+    "GET /hc/pacientes/ — Patient list",
+    "GET /hc/pacientes/nuevo — New patient form",
+    "POST /hc/pacientes/crear — Create patient",
+    "GET /hc/pacientes/editar/<id> — Edit patient",
+    "POST /hc/pacientes/actualizar/<id> — Update patient",
+    "POST /hc/pacientes/toggle/<id> — Toggle patient status",
+    "GET /hc/pacientes/ver/<id> — Patient detail",
+    "GET /hc/evoluciones/paciente/<id> — List evolutions",
+    "GET /hc/evoluciones/nuevo/<id> — New evolution form",
+    "POST /hc/evoluciones/crear/<id> — Create evolution",
+    "GET /hc/signos/paciente/<id> — List vital signs",
+    "GET /hc/signos/nuevo/<id> — New vital signs form",
+    "POST /hc/signos/crear/<id> — Create vital signs",
+    "GET/POST /hc/configuracion/roles-permisos/ — Roles & permissions matrix",
+    "POST /hc/configuracion/roles-permisos/crear — Create role",
+    "GET/POST /hc/configuracion/usuarios/ — User management",
+    "GET/POST /hc/configuracion/sedes — Branch management",
+    "GET/POST /hc/configuracion/especialidades — Specialty management",
+    "GET/POST /hc/configuracion/consultorios — Office management",
+    "GET/POST /hc/configuracion/profesionales — Professional management",
+    "GET/POST /hc/configuracion/servicios — Service management",
+    "GET/POST /hc/configuracion/paises — Country management",
+    "GET /admin/sync_rutas — Sync routes to Supabase"
+  ]
+}
