@@ -1,0 +1,156 @@
+---
+title: "Roles & Permissions"
+description: "Configure the permission matrix that controls what each role can see and do across every VITACORE module."
+---
+
+VITACORE uses a **role × module permission matrix** stored in the `roles_modulos` table. Each row maps one role to one module and carries four boolean flags. When a user accesses any route decorated with `@rol_required(usar_matriz=True)`, the system checks the matrix in real time.
+
+---
+
+## Permission types
+
+| Permission | Form field | What it controls |
+|---|---|---|
+| `can_view` | `view_<modulo_id>` | The user can navigate to and view the module. |
+| `can_create` | `create_<modulo_id>` | The user can create new records inside the module. |
+| `can_edit` | `edit_<modulo_id>` | The user can modify existing records. |
+| `can_delete` | `delete_<modulo_id>` | The user can delete or deactivate records. |
+
+<Note>
+  If a role has no entry for a module in `roles_modulos`, all four flags default to `False`. The user cannot see or interact with that module at all.
+</Note>
+
+---
+
+## Navigating to the permissions page
+
+Go to **Configuration → Roles & Permissions** at:
+
+```
+/hc/configuracion/roles-permisos/
+```
+
+The page lists all active roles in a dropdown. Select a role to load its current permission matrix. The matrix is grouped by **section** (as defined on each module row) so related modules appear together.
+
+---
+
+## Editing the permission matrix
+
+<Steps>
+  <Step title="Select a role">
+    Use the role dropdown at the top of the page to select the role you want to configure. The URL updates to include `?role_id=<id>`, so you can link directly to a role's permission screen.
+  </Step>
+
+  <Step title="Check permissions per module">
+    For each module row, check the boxes for the permissions you want to grant. The form renders one row per active module, ordered by section and `sort_order`.
+
+    Under the hood, `construir_matriz_roles(role_id)` fetches all active modules from the `modulos` table and merges the role's existing `roles_modulos` rows into a dictionary keyed by `modulo_id`:
+
+    ```python
+    def construir_matriz_roles(role_id: int):
+        modulos = listar_modulos()
+        permisos = listar_permisos_de_rol(role_id)
+        permisos_map = {p["modulo_id"]: p for p in permisos}
+        secciones = {}
+        for modulo in modulos:
+            section = modulo.get("section") or "OTROS"
+            permiso = permisos_map.get(modulo["id"], {})
+            item = {
+                "id": modulo["id"],
+                "can_view":   bool(permiso.get("can_view",   False)),
+                "can_create": bool(permiso.get("can_create", False)),
+                "can_edit":   bool(permiso.get("can_edit",   False)),
+                "can_delete": bool(permiso.get("can_delete", False)),
+            }
+            secciones.setdefault(section, []).append(item)
+        return secciones
+    ```
+  </Step>
+
+  <Step title="Save the matrix">
+    Click **Save permissions**. The form posts `role_id` and a list of `modulo_ids` together with the individual checkbox values.
+
+    `guardar_permisos_rol()` first **deletes** all existing `roles_modulos` rows for the role, then inserts the new set in a single batch:
+
+    ```python
+    def guardar_permisos_rol(role_id: int, permisos: list[dict]):
+        supabase.table("roles_modulos").delete().eq("role_id", role_id).execute()
+        if permisos:
+            supabase.table("roles_modulos").insert(permisos).execute()
+    ```
+
+    Only modules where at least one of the four flags is `True` are included in the new insert — unchecked rows are simply not stored.
+  </Step>
+</Steps>
+
+---
+
+## Access control decorator
+
+All routes that participate in the permission matrix use:
+
+```python
+@rol_required(usar_matriz=True)
+```
+
+The decorator reads `session["user"]["role_id"]` and calls `tiene_permiso_endpoint(role_id, endpoint)` to verify the current request endpoint is allowed. If it is not, the user receives a **403** response (`acceso_denegado.html` for browser requests, a JSON `403` for AJAX/JSON requests).
+
+You can also pass explicit role names to bypass the matrix check for specific roles:
+
+```python
+@rol_required("admin", usar_matriz=True)
+```
+
+This grants access if the user's role code is `"admin"` **or** if the matrix permits the endpoint for their role.
+
+---
+
+## Route permissions sync
+
+VITACORE keeps a `rutas` table in Supabase that mirrors every registered Flask route. This table is used by the route-level permissions feature (`/hc/configuracion/permisos-rutas/`).
+
+To sync all current Flask routes into Supabase, call:
+
+```
+GET /admin/sync_rutas
+```
+
+The endpoint iterates `current_app.url_map.iter_rules()`, skips static endpoints, and upserts each route into the `rutas` table on the `endpoint` column:
+
+```python
+for rule in current_app.url_map.iter_rules():
+    if rule.endpoint.startswith("static"):
+        continue
+    data = {
+        "endpoint": rule.endpoint,
+        "ruta": str(rule),
+        "metodos": ",".join(sorted(rule.methods - {"HEAD", "OPTIONS"}))
+    }
+    supabase.table("rutas").upsert(data, on_conflict="endpoint").execute()
+```
+
+It returns a JSON response:
+
+```json
+{
+  "status": "ok",
+  "rutas_sincronizadas": 42
+}
+```
+
+<Note>
+  Run `/admin/sync_rutas` after deploying new blueprints or adding routes so the route-permissions matrix stays accurate.
+</Note>
+
+---
+
+## Route reference
+
+| Method | URL | Action |
+|---|---|---|
+| `GET` | `/hc/configuracion/roles-permisos/` | View permission matrix for a role |
+| `POST` | `/hc/configuracion/roles-permisos/` | Save updated permissions |
+| `POST` | `/hc/configuracion/roles-permisos/crear` | Create a new role |
+| `GET` | `/hc/configuracion/permisos-rutas/` | View route-level permissions per role |
+| `POST` | `/hc/configuracion/permisos-rutas/` | Save route-level permissions |
+| `GET` | `/admin/sync_rutas` | Sync Flask routes to the `rutas` table |

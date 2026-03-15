@@ -1,0 +1,233 @@
+---
+title: "Data Models"
+description: "Field definitions for all core data structures used in VITACORE."
+---
+
+This page documents the normalized data shapes returned by VITACORE repositories. Each repository applies a `_normalize_row()` function before returning data to route handlers, so the shapes below are what you can expect in Jinja2 templates and any downstream logic.
+
+---
+
+## Patient (`hc_pacientes`)
+
+Source: `repositories/hc_pacientes_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `tipo_documento_id` | integer | FK to `hc_tipos_documento` | — |
+| `numero_documento` | string | Document number | `""` |
+| `nombres` | string | First name(s) | `""` |
+| `apellidos` | string | Last name(s) | `""` |
+| `fecha_nacimiento` | string (date) | Date of birth (`YYYY-MM-DD`) | `null` |
+| `sexo` | string | Biological sex | `""` |
+| `telefono` | string | Landline phone | `""` |
+| `celular` | string | Mobile phone | `""` |
+| `email` | string | Email address | `""` |
+| `direccion` | string | Physical address | `""` |
+| `aseguradora` | string | Health insurer | `""` |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | `"ACTIVO"` |
+| `created_at` | string (ISO 8601) | Record creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Clinical Evolution (`hc_evoluciones`)
+
+Source: `repositories/hc_evoluciones_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `paciente_id` | integer | FK to `hc_pacientes` | — |
+| `fecha` | string (date/datetime) | Date of the encounter | `null` |
+| `motivo_consulta` | string | Chief complaint | `""` |
+| `enfermedad_actual` | string | History of present illness | `""` |
+| `examen_fisico` | string | Physical examination findings | `""` |
+| `impresion_diagnostica` | string | Diagnostic impression | `""` |
+| `plan` | string | Treatment plan | `""` |
+| `medico` | string | Attending physician name/ID | `""` |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | `"ACTIVO"` |
+
+---
+
+## Vital Signs (`hc_signos_vitales`)
+
+Source: `repositories/hc_signos_repo.py`
+
+| Field | Type | Description | Notes |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `paciente_id` | integer | FK to `hc_pacientes` | — |
+| `fecha` | string (date/datetime) | Measurement date | Set by the database |
+| `peso` | float | Weight in kg | Form input, parsed as `float` |
+| `talla` | float | Height in cm | Form input, parsed as `float` |
+| `imc` | float | Body mass index | Computed: `round(peso / (talla/100)**2, 2)`; `0` if `talla == 0` |
+| `presion_sistolica` | string | Systolic blood pressure (mmHg) | — |
+| `presion_diastolica` | string | Diastolic blood pressure (mmHg) | — |
+| `frecuencia_cardiaca` | string | Heart rate (bpm) | — |
+| `frecuencia_respiratoria` | string | Respiratory rate (breaths/min) | — |
+| `temperatura` | string | Body temperature (°C) | — |
+| `observaciones` | string | Free-text observations | — |
+
+---
+
+## Healthcare Professional (`hc_profesionales`)
+
+Source: `repositories/hc_profesionales_repo.py`
+
+| Field | Type | Description | Notes |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `tipo_documento_id` | integer | FK to `hc_tipos_documento` | — |
+| `tipo_documento_codigo` | string | Denormalized document type code | Resolved from join |
+| `numero_documento` | string | Document number | — |
+| `nombres` | string | First name(s) | — |
+| `apellidos` | string | Last name(s) | — |
+| `nombre_completo` | string | Full name (`nombres + apellidos`) | Computed on insert/update |
+| `especialidad_id` | integer | FK to `hc_especialidades` | — |
+| `especialidad_nombre` | string | Denormalized speciality name | Resolved from join |
+| `sede_id` | integer | FK to `hc_sedes` | — |
+| `sede_nombre` | string | Denormalized facility name | Resolved from join |
+| `consultorio_id` | integer | FK to `hc_consultorios` | — |
+| `consultorio_nombre` | string | Denormalized room name | Resolved from join |
+| `registro_profesional` | string | Professional licence number | — |
+| `correo` | string | Email address | — |
+| `telefono` | string | Phone number | — |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | Default `"ACTIVO"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | — |
+| `updated_at` | string (ISO 8601) | Last update timestamp | — |
+
+---
+
+## User Profile (`profiles`)
+
+The profile shape is built from the `profiles` table joined with `roles`. You access it via `session["user"]` in templates and route handlers.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string (UUID) | Matches `auth.users.id` in Supabase Auth |
+| `username` | string | Login username (lowercase) |
+| `full_name` | string | Display name |
+| `email` | string | Email address |
+| `role_id` | integer | FK to the `roles` table |
+| `role` | string | Role machine code (from `roles.code`) |
+| `role_name` | string | Role display name (from `roles.name`) |
+
+Additionally, `session["supabase_access_token"]` and `session["supabase_refresh_token"]` hold the raw Supabase Auth JWT tokens.
+
+---
+
+## Facility (`hc_sedes`)
+
+Source: `repositories/hc_sedes_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `codigo` | string | Unique facility code (uppercased) | `""` |
+| `nombre` | string | Facility name | `""` |
+| `ciudad` | string | City | `""` |
+| `direccion` | string | Street address | `""` |
+| `telefono` | string | Phone number | `""` |
+| `estado` | string | `"ACTIVA"` or `"INACTIVA"` | `"ACTIVA"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Document Type (`hc_tipos_documento`)
+
+Source: `repositories/hc_tipos_documento_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `codigo` | string | Unique type code (case-insensitive) | `""` |
+| `nombre` | string | Display name | `""` |
+| `descripcion` | string | Optional description | `""` |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | `"ACTIVO"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Speciality (`hc_especialidades`)
+
+Source: `repositories/hc_especialidades_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `codigo` | string | Unique speciality code (case-insensitive) | `""` |
+| `nombre` | string | Display name | `""` |
+| `descripcion` | string | Optional description | `""` |
+| `estado` | string | `"ACTIVA"` or `"INACTIVA"` | `"ACTIVA"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Consultation Room (`hc_consultorios`)
+
+Source: `repositories/hc_consultorios_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `sede_id` | integer | FK to `hc_sedes` | — |
+| `sede_nombre` | string | Denormalized facility name | `""` |
+| `codigo` | string | Unique room code (uppercased) | `""` |
+| `nombre` | string | Room name | `""` |
+| `piso` | string | Floor or level | `""` |
+| `descripcion` | string | Optional description | `""` |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | `"ACTIVO"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Country (`hc_paises`)
+
+Source: `repositories/hc_paises_repo.py`
+
+| Field | Type | Description | Default |
+|---|---|---|---|
+| `id` | integer | Primary key | — |
+| `codigo_iso2` | string | 2-letter ISO code (uppercased) | `""` |
+| `codigo_iso3` | string | 3-letter ISO code (uppercased) | `""` |
+| `nombre` | string | Country name | `""` |
+| `estado` | string | `"ACTIVO"` or `"INACTIVO"` | `"ACTIVO"` |
+| `created_at` | string (ISO 8601) | Creation timestamp | `null` |
+| `updated_at` | string (ISO 8601) | Last update timestamp | `null` |
+
+---
+
+## Local JSON data files
+
+The `data/` directory contains flat JSON files used by the `*_local.py` repository variants (file-based fallback, no Supabase required). Each file stores an array of objects matching the structure of its corresponding Supabase table.
+
+| File | Corresponds to | Default content |
+|---|---|---|
+| `data/hc_sedes.json` | `hc_sedes` table | `[]` |
+| `data/hc_tipos_documento.json` | `hc_tipos_documento` table | `[]` |
+| `data/hc_especialidades.json` | `hc_especialidades` table | `[]` |
+| `data/hc_consultorios.json` | `hc_consultorios` table | `[]` |
+| `data/hc_profesionales.json` | `hc_profesionales` table | `[]` |
+
+The local repos auto-create missing files on first read. An example `hc_sedes.json` entry produced by `hc_sedes_repo_local.crear()` looks like this:
+
+```json
+[
+  {
+    "id": 1,
+    "codigo": "SEDE01",
+    "nombre": "Sede Principal",
+    "ciudad": "Bogotá",
+    "direccion": "Calle 123 # 45-67",
+    "telefono": "6015551234",
+    "estado": "ACTIVA",
+    "created_at": "2025-01-15T10:30:00",
+    "updated_at": null
+  }
+]
+```

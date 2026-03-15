@@ -1,0 +1,119 @@
+---
+title: "Vital Signs"
+description: "Record weight, height, blood pressure, heart rate, respiratory rate, temperature, and automatically calculated BMI per patient visit."
+---
+
+The vital signs module lets you capture a full set of clinical measurements for a patient at a given point in time. BMI is calculated automatically on the server from the submitted weight and height values — you do not need to compute it manually.
+
+## URL routes
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/hc/signos/paciente/<paciente_id>` | List all vital signs records for a patient |
+| `GET` | `/hc/signos/nuevo/<paciente_id>` | Show the new vital signs form |
+| `POST` | `/hc/signos/crear/<paciente_id>` | Submit and save a new vital signs record |
+
+## Vital signs fields
+
+| Field | Description | Unit |
+|-------|-------------|------|
+| `peso` | Body weight | kg |
+| `talla` | Height | cm |
+| `imc` | Body Mass Index — auto-calculated from weight and height | kg/m² |
+| `presion_sistolica` | Systolic blood pressure | mmHg |
+| `presion_diastolica` | Diastolic blood pressure | mmHg |
+| `frecuencia_cardiaca` | Heart rate | bpm |
+| `frecuencia_respiratoria` | Respiratory rate | breaths/min |
+| `temperatura` | Body temperature | °C |
+| `observaciones` | Free-text clinical observations | — |
+
+The repository also stores `paciente_id` (foreign key to the patient) and `fecha` (date of the record).
+
+## BMI auto-calculation
+
+When you submit the form, the route reads `peso` (kg) and `talla` (cm), converts height to meters, and computes BMI using the standard formula. The result is rounded to two decimal places before being stored:
+
+```python
+peso = float(request.form.get("peso") or 0)
+talla = float(request.form.get("talla") or 0)
+
+imc = 0
+
+if talla > 0:
+    imc = peso / ((talla / 100) ** 2)
+
+data["imc"] = round(imc, 2)
+```
+
+**Formula:** `IMC = peso / (talla_en_metros)²`
+
+If `talla` is zero or not provided, `imc` defaults to `0` to avoid a division-by-zero error.
+
+<Info>
+  BMI is calculated on the server side — it is not a form input. The client submits only `peso` and `talla`; the `imc` value in the stored record is always derived from those two fields.
+</Info>
+
+## Recording vital signs
+
+<Steps>
+  <Step title="Navigate to the patient">
+    Start from the patient list at `/hc/pacientes/` and open the target patient's record, or navigate directly to `/hc/signos/paciente/<paciente_id>` to see their vital signs history. Records are listed in reverse chronological order.
+  </Step>
+  <Step title="Open the new vital signs form">
+    Navigate to `/hc/signos/nuevo/<paciente_id>`. The form embeds the `paciente_id` so it is included automatically when you submit.
+  </Step>
+  <Step title="Enter measurements">
+    Fill in the measurements you have available. Enter weight in **kg** and height in **cm**. You do not need to calculate BMI — the server computes it from those two values.
+  </Step>
+  <Step title="Add observations if needed">
+    Use the `observaciones` field to note any relevant clinical context — for example, whether the patient was fasting, or whether a measurement was taken multiple times.
+  </Step>
+  <Step title="Submit the form">
+    The form POSTs to `/hc/signos/crear/<paciente_id>`. The route computes BMI, assembles the full payload, calls `repo.crear(data)`, and inserts the record into `hc_signos_vitales` in Supabase.
+  </Step>
+  <Step title="Confirm and review">
+    A success flash message confirms the record was saved, and you are redirected to `/hc/signos/paciente/<paciente_id>` where the new entry appears at the top of the list.
+  </Step>
+</Steps>
+
+## How vital signs are stored
+
+After BMI calculation, the route assembles the complete payload:
+
+```python
+data = {
+    "paciente_id": paciente_id,
+    "peso": peso,
+    "talla": talla,
+    "imc": round(imc, 2),
+    "presion_sistolica": request.form.get("presion_sistolica"),
+    "presion_diastolica": request.form.get("presion_diastolica"),
+    "frecuencia_cardiaca": request.form.get("frecuencia_cardiaca"),
+    "frecuencia_respiratoria": request.form.get("frecuencia_respiratoria"),
+    "temperatura": request.form.get("temperatura"),
+    "observaciones": request.form.get("observaciones")
+}
+
+repo.crear(data)
+```
+
+The repository inserts this dictionary directly into the `hc_signos_vitales` table using the Supabase admin client.
+
+## Retrieving vital signs history
+
+The `listar_por_paciente` function queries all vital signs records for a given patient, ordered most recent first:
+
+```python
+r = (
+    _sb()
+    .table("hc_signos_vitales")
+    .select("*")
+    .eq("paciente_id", paciente_id)
+    .order("fecha", desc=True)
+    .execute()
+)
+```
+
+<Tip>
+  Track BMI trends over time by comparing `imc` values across multiple visits. Because the value is stored (not recomputed on read), historical BMI is always consistent with the weight and height that were recorded at that visit.
+</Tip>

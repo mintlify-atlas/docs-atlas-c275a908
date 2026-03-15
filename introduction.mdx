@@ -1,0 +1,43 @@
+---
+title: "Introduction"
+description: "VITACORE is a web-based electronic health record platform for healthcare teams managing patients, clinical records, and medical staff."
+---
+
+VITACORE is a web-based electronic health record (EHR) platform built with **Flask** and **Supabase** that gives healthcare teams a centralized system to manage the full clinical workflow. It solves the problem of fragmented, paper-based, or siloed clinical records management by providing a single application where professionals can register patients, document consultations with structured evolution notes, track vital signs, and control who has access to what — all backed by a cloud database with built-in authentication.
+
+## Key modules
+
+| Module | Description |
+|---|---|
+| **Patients** | Register and search patients with complete demographic profiles including document type, contact details, and assigned branch or office. |
+| **Clinical evolutions** | Record structured consultation notes covering the reason for visit, current illness, physical examination, diagnosis, and treatment plan. |
+| **Vital signs** | Log weight, blood pressure, heart rate, temperature, and height per visit with automatic BMI calculation. |
+| **Roles and users** | Create medical professionals, assign roles, and configure per-route permissions to enforce access control across the application. |
+| **Configuration** | Manage lookup data: branches, offices, medical specialties, document types, countries, and services. |
+
+## Technology stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3 / Flask |
+| Database & authentication | Supabase (PostgreSQL + Auth) |
+| Frontend templates | Jinja2 HTML |
+| Environment configuration | python-dotenv |
+| Supabase client | supabase-py |
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get VITACORE running in minutes — from setup to first login.
+  </Card>
+  <Card title="Patient management" icon="user-injured" href="/features/patients">
+    Learn how to register, search, and manage patient records.
+  </Card>
+  <Card title="Users and roles" icon="users" href="/admin/users-roles">
+    Configure professionals, roles, and access permissions.
+  </Card>
+  <Card title="Supabase integration" icon="database" href="/integrations/supabase">
+    Understand how VITACORE connects to Supabase for data and auth.
+  </Card>
+</CardGroup>

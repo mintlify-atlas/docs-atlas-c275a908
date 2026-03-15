@@ -1,97 +1,69 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "VITACORE"
+description: "Electronic health record platform for managing patients, clinical evolutions, vital signs, and medical staff."
 ---
 
-## Setting up
-
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get VITACORE running in minutes — from cloning to first login.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Patient Management" icon="user-injured" href="/features/patients">
+    Register, search, and manage patient records with full demographic data.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Clinical Evolutions" icon="notes-medical" href="/features/clinical-evolutions">
+    Record consultation notes: reason, current illness, physical exam, diagnosis, and plan.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Vital Signs" icon="heart-pulse" href="/features/vital-signs">
+    Track weight, blood pressure, heart rate, temperature, and automatic BMI calculation.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## What is VITACORE?
 
-Everything you need to create world-class documentation.
+VITACORE is a web-based electronic health record (EHR) platform built with **Flask** and **Supabase**. It gives healthcare teams a centralized system to:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+- Register and track patients with complete demographic profiles
+- Document clinical consultations with structured evolution notes
+- Record vital signs and automatically compute BMI
+- Manage medical professionals, specialties, branches, and offices
+- Control access with a role-based permission system
 
-## Need inspiration?
+## Core modules
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<CardGroup cols={3}>
+  <Card title="Historia Clínica" icon="file-medical" href="/features/patients">
+    Patient records, evolutions, and vital signs all in one place.
+  </Card>
+  <Card title="Configuración" icon="gear" href="/admin/configuration">
+    Branches, offices, specialties, document types, countries, and services.
+  </Card>
+  <Card title="Usuarios y Roles" icon="users" href="/admin/users-roles">
+    Create users, assign roles, and configure per-route permissions.
+  </Card>
+</CardGroup>
+
+## Technology stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Python 3 / Flask |
+| Database & Auth | Supabase (PostgreSQL + Auth) |
+| Frontend | Jinja2 HTML templates |
+| Configuration | python-dotenv |
+
+## Navigation
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Environment setup, dependencies, and environment variables.
+  </Card>
+  <Card title="Supabase Integration" icon="database" href="/integrations/supabase">
+    How VITACORE connects to Supabase for data and authentication.
+  </Card>
+  <Card title="Roles & Permissions" icon="shield-halved" href="/admin/permissions">
+    Understand the role-based access control matrix.
+  </Card>
+  <Card title="Route Reference" icon="map" href="/reference/auth-routes">
+    Complete reference for all HTTP routes in the application.
+  </Card>
+</CardGroup>

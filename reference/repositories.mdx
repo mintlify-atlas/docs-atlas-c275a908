@@ -1,0 +1,257 @@
+---
+title: "Repositories"
+description: "Overview of the repository layer that abstracts all Supabase data access in VITACORE."
+---
+
+VITACORE uses a **repository pattern** to isolate all database logic from Flask route handlers. Every repository module in `repositories/` exposes plain Python functions — no classes, no ORM — that call `get_supabase_admin()` and return normalized Python dicts.
+
+Routes import repositories directly:
+
+```python
+from repositories import hc_pacientes_repo as repo
+
+patients = repo.listar()
+```
+
+This keeps route handlers free of Supabase query logic and makes it straightforward to swap data sources (for example, from Supabase to a local JSON file).
+
+<Info>
+  Several repositories have a `*_local.py` counterpart that stores data in a JSON file under `data/` instead of Supabase. The local variants implement the exact same function signatures, so you can swap the import in a route without changing any other code.
+</Info>
+
+---
+
+## Repositories
+
+<AccordionGroup>
+
+  <Accordion title="auth_repository.py">
+    **Purpose:** Retrieves user profiles by username for the login flow.
+
+    **Table:** `profiles` (with a join to `roles`)
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `obtener_perfil_por_username` | `(username: str) -> dict \| None` | Queries `profiles` by `username`, selecting `id`, `username`, `full_name`, `email`, `role_id`, `is_active`, and the nested `roles` object. Returns `None` if not found. |
+
+    ```python
+    from repositories.auth_repository import obtener_perfil_por_username
+
+    perfil = obtener_perfil_por_username("jdoe")
+    # {
+    #   "id": "uuid...",
+    #   "username": "jdoe",
+    #   "email": "jdoe@example.com",
+    #   "role_id": 1,
+    #   "is_active": True,
+    #   "roles": { "id": 1, "code": "admin", "name": "Administrador" }
+    # }
+    ```
+  </Accordion>
+
+  <Accordion title="hc_pacientes_repo.py">
+    **Purpose:** Full CRUD for patient records.
+
+    **Table:** `hc_pacientes`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar` | `() -> list[dict]` | Returns all patients ordered by `apellidos`, `nombres`. Joins `hc_tipos_documento(nombre)`. |
+    | `obtener` | `(item_id: int) -> dict \| None` | Returns a single patient by primary key. |
+    | `buscar_por_documento` | `(numero_documento: str) -> dict \| None` | Exact match on `numero_documento`. Returns `None` for blank input. |
+    | `crear` | `(data: dict) -> dict \| None` | Inserts a new patient. Sets `estado = "ACTIVO"`. |
+    | `actualizar` | `(item_id: int, data: dict) -> dict \| None` | Updates all editable fields for the given patient. |
+    | `cambiar_estado` | `(item_id: int, nuevo_estado: str) -> dict \| None` | Sets `estado` to the provided value (uppercased). |
+  </Accordion>
+
+  <Accordion title="hc_evoluciones_repo.py">
+    **Purpose:** Create and list clinical evolution notes per patient.
+
+    **Table:** `hc_evoluciones`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar_por_paciente` | `(paciente_id: int) -> list[dict]` | Returns all evolutions for the patient, ordered by `fecha` descending. |
+    | `obtener` | `(item_id: int) -> dict \| None` | Returns a single evolution by primary key. |
+    | `crear` | `(data: dict) -> dict \| None` | Inserts a new evolution note. |
+  </Accordion>
+
+  <Accordion title="hc_signos_repo.py">
+    **Purpose:** Create and list vital signs records per patient.
+
+    **Table:** `hc_signos_vitales`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar_por_paciente` | `(paciente_id: int) -> list[dict]` | Returns all vital signs for the patient, ordered by `fecha` descending. |
+    | `crear` | `(data: dict) -> list \| None` | Inserts a new vital signs record. The `imc` field must be computed by the caller before passing `data`. |
+
+    <Note>
+      The IMC (BMI) calculation happens in the route (`blueprints/hc_signos_vitales/routes.py`) before calling `repo.crear()`. The repository receives the pre-computed `imc` value.
+    </Note>
+  </Accordion>
+
+  <Accordion title="roles_repository.py">
+    **Purpose:** Manage roles and the module-level permission matrix.
+
+    **Tables:** `roles`, `modulos`, `roles_modulos`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar_roles` | `() -> list[dict]` | Returns all active roles ordered by name. Fields: `id`, `code`, `name`, `is_active`. |
+    | `obtener_rol_por_id` | `(role_id: int) -> dict \| None` | Returns a single role by ID. |
+    | `listar_modulos` | `() -> list[dict]` | Returns all active modules ordered by `section`, `sort_order`, `name`. |
+    | `listar_permisos_de_rol` | `(role_id: int) -> list[dict]` | Returns rows from `roles_modulos` for the given role. |
+    | `construir_matriz_roles` | `(role_id: int) -> dict` | Builds a `{section: [module_item, ...]}` dict combining modules with the role's current permissions. |
+    | `guardar_permisos_rol` | `(role_id: int, permisos: list[dict]) -> list` | Replaces the entire permission set for the role: deletes existing rows then bulk-inserts the new ones. |
+    | `crear_rol` | `(code: str, name: str) -> dict \| None` | Inserts a new role with `is_active = True`. |
+  </Accordion>
+
+  <Accordion title="users_repository.py">
+    **Purpose:** User management — list, create, update, and toggle users. Bridges Supabase Auth and the `profiles` table.
+
+    **Tables:** `profiles`, `roles`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar_roles_activos` | `() -> list[dict]` | Returns active roles (`id`, `code`, `name`) for form dropdowns. |
+    | `listar_usuarios` | `() -> list[dict]` | Returns all profiles joined with their role, ordered by username. |
+    | `obtener_usuario` | `(user_id: str) -> dict \| None` | Returns a single profile by UUID. |
+    | `crear_usuario_con_perfil` | `(username, full_name, email, password, role_id) -> dict` | Creates a Supabase Auth account (`email_confirm=True`), then inserts a `profiles` row using the returned user UUID. Raises `ValueError` if Auth creation fails. |
+    | `actualizar_usuario` | `(user_id, username, full_name, email, role_id, is_active) -> dict \| None` | Updates both `auth.users` (email + metadata via Admin API) and the `profiles` row. |
+    | `cambiar_estado_usuario` | `(user_id: str, is_active: bool) -> dict \| None` | Sets `is_active` on the `profiles` row only. |
+  </Accordion>
+
+  <Accordion title="security_repository.py">
+    **Purpose:** Route-level security — builds the route permission matrix and checks if a role has access to a given Flask endpoint.
+
+    **Tables:** `roles`, `rutas`, `roles_rutas`
+
+    | Function | Signature | Description |
+    |---|---|---|
+    | `listar_roles` | `() -> list[dict]` | Returns active roles. |
+    | `obtener_rol_por_id` | `(role_id: int) -> dict \| None` | Returns a single role by ID. |
+    | `listar_rutas` | `() -> list[dict]` | Returns all routes from the `rutas` table ordered by path. Fields: `id`, `endpoint`, `ruta`, `metodos`. |
+    | `listar_rutas_permitidas_por_rol` | `(role_id: int) -> list[dict]` | Returns `roles_rutas` rows for the given role. |
+    | `construir_matriz_rutas` | `(role_id: int) -> list[dict]` | Merges all routes with the role's allowed set, adding a `permitida: bool` flag to each route. |
+    | `guardar_permisos_rutas` | `(role_id: int, ruta_ids: list[int]) -> list` | Replaces the route permission set for the role. |
+    | `tiene_permiso_endpoint` | `(role_id: int, endpoint: str) -> bool` | Returns `True` if the role has an entry in `roles_rutas` for the given endpoint. Used for runtime access checks. |
+  </Accordion>
+
+  <Accordion title="hc_sedes_repo.py / hc_sedes_repo_local.py">
+    **Purpose:** CRUD for healthcare facility locations.
+
+    **Table (Supabase):** `hc_sedes` (configurable via `SUPABASE_TABLE_HC_SEDES` env var)
+
+    **File (local):** `data/hc_sedes.json`
+
+    Both variants implement the same interface:
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All facilities ordered by status then name. |
+    | `obtener(sede_id)` | Single facility by ID. |
+    | `existe_codigo(codigo, exclude_id=None)` | Duplicate code check. Case-insensitive in the local variant. |
+    | `crear(data)` | Inserts / appends a new facility. |
+    | `actualizar(sede_id, data)` | Updates all fields. |
+    | `cambiar_estado(sede_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_tipos_documento_repo.py / hc_tipos_documento_repo_local.py">
+    **Purpose:** CRUD for document type catalogue.
+
+    **Table (Supabase):** `hc_tipos_documento` (configurable via `SUPABASE_TABLE_HC_TIPOS_DOCUMENTO` env var)
+
+    **File (local):** `data/hc_tipos_documento.json`
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All types ordered by status then code. |
+    | `obtener(item_id)` | Single type by ID. |
+    | `existe_codigo(codigo, exclude_id=None)` | Case-insensitive duplicate check (`ilike`). |
+    | `crear(data)` | Inserts a new document type. Code is uppercased. |
+    | `actualizar(item_id, data)` | Updates all fields. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_especialidades_repo.py">
+    **Purpose:** CRUD for medical specialities catalogue.
+
+    **Table:** `hc_especialidades`
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All specialities ordered by status then name. |
+    | `obtener(item_id)` | Single speciality by ID. |
+    | `existe_codigo(codigo, exclude_id=None)` | Case-insensitive duplicate check (`ilike`). |
+    | `crear(data)` | Inserts. Code is uppercased. Status defaults to `"ACTIVA"`. |
+    | `actualizar(item_id, data)` | Updates all fields. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_consultorios_repo.py / hc_consultorios_repo_local.py">
+    **Purpose:** CRUD for consultation rooms, linked to a facility.
+
+    **Table (Supabase):** `hc_consultorios` (configurable via `SUPABASE_TABLE_HC_CONSULTORIOS` env var)
+
+    **File (local):** `data/hc_consultorios.json`
+
+    The Supabase variant joins `hc_sedes` to resolve `sede_nombre`. The local variant stores `sede_nombre` denormalized.
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All rooms ordered by status, facility name, room name. |
+    | `obtener(item_id)` | Single room by ID (with sede join in Supabase variant). |
+    | `existe_codigo(codigo, exclude_id=None)` | Duplicate code check. |
+    | `crear(data)` | Inserts a new room. `sede_id` is cast to `int` (or `None`). |
+    | `actualizar(item_id, data)` | Updates all fields. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_profesionales_repo.py">
+    **Purpose:** CRUD for healthcare professionals, with multi-table join resolution.
+
+    **Table:** `hc_profesionales`
+
+    The `listar()` and `obtener()` functions join `hc_tipos_documento`, `hc_especialidades`, `hc_sedes`, and `hc_consultorios` to denormalize display names.
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All professionals ordered by status, apellidos, nombres. |
+    | `obtener(item_id)` | Single professional by ID (with all joins). |
+    | `existe_documento(tipo_documento_id, numero_documento, exclude_id=None)` | Duplicate document check using `ilike` on `numero_documento`. |
+    | `crear(data)` | Inserts. Computes `nombre_completo = nombres + " " + apellidos`. |
+    | `actualizar(item_id, data)` | Updates all fields including `nombre_completo`. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_servicios_repo.py">
+    **Purpose:** CRUD for medical services, optionally linked to a speciality.
+
+    **Table:** `hc_servicios`
+
+    | Function | Description |
+    |---|---|
+    | `listar_servicios()` | All services ordered by name. Joins `hc_especialidades(nombre)`. |
+    | `obtener_servicio(servicio_id)` | Single service by ID. |
+    | `crear_servicio(data)` | Inserts a new service. |
+    | `actualizar_servicio(servicio_id, data)` | Updates the service. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+  <Accordion title="hc_paises_repo.py">
+    **Purpose:** CRUD for country catalogue.
+
+    **Table:** `hc_paises`
+
+    | Function | Description |
+    |---|---|
+    | `listar()` | All countries ordered by name. |
+    | `obtener(item_id)` | Single country by ID. |
+    | `obtener_por_iso2(codigo_iso2)` | Lookup by ISO2 code. Used for duplicate validation. |
+    | `crear(data)` | Inserts. ISO2/ISO3 codes are uppercased. Status defaults to `"ACTIVO"`. |
+    | `actualizar(item_id, data)` | Updates ISO codes and name. |
+    | `cambiar_estado(item_id, nuevo_estado)` | Sets `estado`. |
+  </Accordion>
+
+</AccordionGroup>

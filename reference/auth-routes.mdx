@@ -1,0 +1,108 @@
+---
+title: "Authentication Routes"
+description: "Login and logout routes for the VITACORE auth blueprint."
+---
+
+The `auth` blueprint handles all authentication concerns. Its routes are registered under the `/auth` prefix in `blueprints/auth/routes.py`.
+
+## Route summary
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/auth/login` | Renders the login form |
+| `POST` | `/auth/login` | Validates credentials and creates a session |
+| `GET` | `/auth/logout` | Clears the session and redirects to login |
+
+---
+
+## GET /auth/login
+
+Renders the login form template (`auth/login.html`). If `session["user"]` is already set, the route redirects immediately to the application home (`inicio`) without showing the form.
+
+---
+
+## POST /auth/login
+
+Processes the submitted login form, authenticates the user against Supabase Auth, and builds the Flask session on success.
+
+### Request parameters
+
+<ParamField body="username" type="string" required>
+  The user's account username. The value is stripped of whitespace and lowercased before lookup.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's plain-text password. Passed directly to `supabase.auth.sign_in_with_password()` — never stored in the session.
+</ParamField>
+
+### Validation and failure messages
+
+The route validates the request before touching Supabase Auth. Each failure re-renders the login form with a flash message:
+
+| Condition | Flash category | Message |
+|---|---|---|
+| `username` or `password` is blank | `warning` | "Debes ingresar usuario y contraseña." |
+| No profile found for the username | `danger` | "El usuario no existe." |
+| Profile `is_active` is `False` | `warning` | "Tu usuario está inactivo." |
+| Profile has no `email` field | `danger` | "El usuario no tiene correo configurado." |
+| Supabase Auth returns no user/session | `danger` | "Usuario o contraseña incorrectos." |
+| Unexpected exception | `danger` | "Error al iniciar sesión: {error}" |
+
+### Session data set on success
+
+On a successful login, two entries are written to the Flask session:
+
+**`session["user"]`** — user identity dict:
+
+<ResponseField name="id" type="string">
+  The profile UUID from the `profiles` table (matches `auth.users.id`).
+</ResponseField>
+
+<ResponseField name="username" type="string">
+  The user's login username.
+</ResponseField>
+
+<ResponseField name="full_name" type="string">
+  The user's display name.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  The user's email address.
+</ResponseField>
+
+<ResponseField name="role_id" type="integer">
+  The numeric ID of the user's assigned role.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  The role's machine-readable code (e.g. `admin`, `medico`).
+</ResponseField>
+
+<ResponseField name="role_name" type="string">
+  The role's human-readable display name.
+</ResponseField>
+
+**Supabase tokens** — set as top-level session keys:
+
+<ResponseField name="supabase_access_token" type="string">
+  The JWT access token returned by Supabase Auth. Valid for the Supabase token TTL.
+</ResponseField>
+
+<ResponseField name="supabase_refresh_token" type="string">
+  The refresh token returned by Supabase Auth. Used to renew the access token.
+</ResponseField>
+
+### Redirect behavior
+
+- **Success** → redirects to `url_for("inicio")` with flash `"Bienvenido a Vitacore."`
+- **Failure** → re-renders `auth/login.html` with the appropriate flash message
+
+---
+
+## GET /auth/logout
+
+Clears the entire Flask session with `session.clear()`, flashes `"Sesión cerrada correctamente."` (category `info`), and redirects to `url_for("auth.login")`.
+
+<Note>
+  Logout does not call `supabase.auth.sign_out()`. The Supabase access token stored in the session is simply discarded when `session.clear()` runs. If you need server-side token revocation, add a `supabase.auth.sign_out()` call in the logout route before clearing the session.
+</Note>

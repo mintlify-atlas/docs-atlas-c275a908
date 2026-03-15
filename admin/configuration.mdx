@@ -1,0 +1,204 @@
+---
+title: "System Configuration"
+description: "Configure the reference data that underpins every clinical workflow in VITACORE — branches, offices, specialties, services, document types, and countries."
+---
+
+All system configuration modules live under `/hc/configuracion/`. Each module follows the same pattern: list, create, edit, and toggle active/inactive. Navigate to the hub page to access any module:
+
+```
+GET /hc/configuracion/
+```
+
+<CardGroup cols={3}>
+  <Card title="Branches (Sedes)" icon="building">
+    Define the physical locations where care is delivered. Route: `/hc/configuracion/sedes`
+  </Card>
+  <Card title="Offices (Consultorios)" icon="door-open">
+    Rooms and offices linked to a branch. Route: `/hc/configuracion/consultorios`
+  </Card>
+  <Card title="Specialties" icon="stethoscope">
+    Medical specialties assigned to professionals and services. Route: `/hc/configuracion/especialidades`
+  </Card>
+  <Card title="Services" icon="list-check">
+    Clinical services offered, grouped by specialty. Route: `/hc/configuracion/servicios`
+  </Card>
+  <Card title="Document Types" icon="id-card">
+    Identification document types used across the platform. Route: `/hc/configuracion/tipos-documento`
+  </Card>
+  <Card title="Countries" icon="globe">
+    ISO country codes used in patient and professional records. Route: `/hc/configuracion/paises`
+  </Card>
+</CardGroup>
+
+---
+
+## Configuration modules
+
+<AccordionGroup>
+  <Accordion title="Branches (Sedes)">
+    Branches represent the physical locations — clinics, hospitals, or offices — where VITACORE operates. Each professional and office is associated with a branch.
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `codigo` | Yes | Unique short code for the branch. Duplicate codes are rejected. |
+    | `nombre` | Yes | Full name of the branch. |
+    | `ciudad` | No | City where the branch is located. |
+    | `direccion` | No | Street address. |
+    | `telefono` | No | Contact phone number. |
+    | `estado` | No | `ACTIVA` or `INACTIVA`. |
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/sedes` | List all branches |
+    | `GET` / `POST` | `/hc/configuracion/sedes/nueva` | Create a new branch |
+    | `GET` / `POST` | `/hc/configuracion/sedes/editar/<id>` | Edit a branch |
+    | `POST` | `/hc/configuracion/sedes/toggle/<id>` | Toggle `ACTIVA` / `INACTIVA` |
+
+    The toggle inverts the current `estado`:
+
+    ```python
+    nuevo_estado = "INACTIVA" if item.get("estado") == "ACTIVA" else "ACTIVA"
+    repo.cambiar_estado(sede_id, nuevo_estado)
+    ```
+  </Accordion>
+
+  <Accordion title="Offices (Consultorios)">
+    Offices are rooms or consultation spaces within a branch. Each office must be linked to an existing branch.
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `sede_id` | Yes | Foreign key to the parent branch. |
+    | `codigo` | Yes | Unique short code. Duplicate codes are rejected. |
+    | `nombre` | Yes | Name of the office or room. |
+    | `piso` | No | Floor number or label. |
+    | `descripcion` | No | Free-text description. |
+    | `estado` | No | `ACTIVO` or `INACTIVO`. |
+
+    The form pre-loads the list of branches from `repo_sedes.listar()` so you can pick the parent sede from a dropdown. The `sede_nombre` field is derived automatically from the selected `sede_id`.
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/consultorios` | List all offices |
+    | `GET` / `POST` | `/hc/configuracion/consultorios/nuevo` | Create a new office |
+    | `GET` / `POST` | `/hc/configuracion/consultorios/editar/<id>` | Edit an office |
+    | `POST` | `/hc/configuracion/consultorios/toggle/<id>` | Toggle `ACTIVO` / `INACTIVO` |
+  </Accordion>
+
+  <Accordion title="Specialties (Especialidades)">
+    Medical specialties are used to categorise professionals and services.
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `codigo` | Yes | Unique short code. Duplicate codes are rejected. |
+    | `nombre` | Yes | Name of the specialty. |
+    | `descripcion` | No | Free-text description. |
+    | `estado` | No | `ACTIVA` or `INACTIVA`. |
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/especialidades` | List all specialties |
+    | `GET` / `POST` | `/hc/configuracion/especialidades/nueva` | Create a new specialty |
+    | `GET` / `POST` | `/hc/configuracion/especialidades/editar/<id>` | Edit a specialty |
+    | `POST` | `/hc/configuracion/especialidades/toggle/<id>` | Toggle `ACTIVA` / `INACTIVA` |
+  </Accordion>
+
+  <Accordion title="Services (Servicios)">
+    Services define the clinical procedures or consultations offered by the practice. Each service can optionally be linked to a specialty.
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `codigo` | Yes | Short code identifying the service. |
+    | `nombre` | Yes | Human-readable name. |
+    | `especialidad_id` | No | Optional FK to a specialty. Sent as `None` if left blank. |
+    | `descripcion` | No | Free-text description. |
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/servicios` | List all services |
+    | `GET` | `/hc/configuracion/servicios/nuevo` | Display creation form |
+    | `POST` | `/hc/configuracion/servicios/crear` | Create a new service |
+    | `GET` | `/hc/configuracion/servicios/<id>/editar` | Display edit form |
+    | `POST` | `/hc/configuracion/servicios/<id>/actualizar` | Save changes |
+    | `POST` | `/hc/configuracion/servicios/toggle/<id>` | Toggle `ACTIVO` / `INACTIVO` |
+
+    <Note>
+      `especialidad_id` is stored as `None` (SQL `NULL`) when the specialty dropdown is left empty, keeping the service unclassified.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Document Types (Tipos de documento)">
+    Document types define the identification schemes accepted for patients and professionals (e.g., national ID card, passport, foreigner ID).
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `codigo` | Yes | Unique short code (e.g., `CC`, `CE`, `PA`). Duplicate codes are rejected. |
+    | `nombre` | Yes | Full name of the document type. |
+    | `descripcion` | No | Additional details. |
+    | `estado` | No | `ACTIVO` or `INACTIVO`. |
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/tipos-documento` | List all document types |
+    | `GET` / `POST` | `/hc/configuracion/tipos-documento/nuevo` | Create a new document type |
+    | `GET` / `POST` | `/hc/configuracion/tipos-documento/editar/<id>` | Edit a document type |
+    | `POST` | `/hc/configuracion/tipos-documento/toggle/<id>` | Toggle `ACTIVO` / `INACTIVO` |
+  </Accordion>
+
+  <Accordion title="Countries (Paises)">
+    Countries provide ISO-standardised country codes used in patient demographic data and professional records.
+
+    **Fields**
+
+    | Field | Required | Notes |
+    |---|---|---|
+    | `codigo_iso2` | Yes | Two-letter ISO 3166-1 alpha-2 code (e.g., `CO`, `US`). Stored uppercase. Must be unique. |
+    | `codigo_iso3` | No | Three-letter ISO 3166-1 alpha-3 code (e.g., `COL`, `USA`). Stored uppercase. |
+    | `nombre` | Yes | Full country name. |
+
+    Duplicate detection is based on `codigo_iso2`. If a country with the same ISO2 code already exists, the form is re-rendered with a warning.
+
+    **Routes**
+
+    | Method | URL | Action |
+    |---|---|---|
+    | `GET` | `/hc/configuracion/paises` | List all countries |
+    | `GET` / `POST` | `/hc/configuracion/paises/nuevo` | Create a new country |
+    | `GET` / `POST` | `/hc/configuracion/paises/editar/<id>` | Edit a country |
+    | `POST` | `/hc/configuracion/paises/toggle/<id>` | Toggle `ACTIVO` / `INACTIVO` |
+
+    <Note>
+      Countries do not have a `codigo` field — uniqueness is enforced on `codigo_iso2`.
+    </Note>
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common patterns
+
+Every configuration module shares the same conventions:
+
+- **Duplicate codes** are detected before insert and update. Editing a record excludes the current record from the uniqueness check (`exclude_id`).
+- **Required fields** — at minimum `codigo` and `nombre` — are validated server-side. Missing values return a flash warning and re-render the form with the submitted data preserved.
+- **Status toggling** uses a POST request to a dedicated `/toggle/<id>` route. The route reads the current state and flips it, so no additional parameters are needed.
+- **Flash messages** confirm every successful create, update, or toggle operation and surface any error messages.

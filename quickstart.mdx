@@ -1,80 +1,116 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick Start"
+description: "Get VITACORE running in minutes — from cloning the repository to your first login."
 ---
 
-## Get started in three steps
+<Note>
+  You need a [Supabase](https://supabase.com) project with PostgreSQL and Auth enabled before running VITACORE. The application uses Supabase for all data persistence and user authentication.
+</Note>
 
-Get your documentation site running locally and make your first customization.
+<Steps>
+  <Step title="Clone the repository">
+    Download the source code to your local machine:
 
-### Step 1: Set up your local environment
+    ```bash
+    git clone https://github.com/msgiraldo01-wq/VITACORE.git
+    cd VITACORE
+    ```
+  </Step>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+  <Step title="Create a virtual environment and install dependencies">
+    VITACORE requires Python 3. Create a virtual environment and install the required packages:
 
-### Step 2: Deploy your changes
+    <CodeGroup>
+    ```bash macOS / Linux
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash Windows
+    python -m venv venv
+    venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+    </CodeGroup>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    The `requirements.txt` installs:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    | Package | Purpose |
+    |---|---|
+    | `flask` | Web framework and routing |
+    | `supabase` | Supabase Python client |
+    | `python-dotenv` | Loads environment variables from `.env` |
+  </Step>
 
-### Step 3: Go live
+  <Step title="Create your .env file">
+    Copy the template below into a file named `.env` at the project root and fill in your Supabase credentials:
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash .env
+    FLASK_SECRET_KEY=your-secret-key-here
+    SUPABASE_URL=https://your-project-id.supabase.co
+    SUPABASE_ANON_KEY=your-anon-key
+    SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+    SUPABASE_TABLE_HC_PROFESIONALES=hc_profesionales
+    ```
+
+    | Variable | Where to find it |
+    |---|---|
+    | `FLASK_SECRET_KEY` | Any long random string — used to sign session cookies |
+    | `SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL |
+    | `SUPABASE_ANON_KEY` | Supabase dashboard → Project Settings → API → `anon` public key |
+    | `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → `service_role` key |
+    | `SUPABASE_TABLE_HC_PROFESIONALES` | Name of the professionals table (default: `hc_profesionales`) |
+
+    <Warning>
+      Never commit your `.env` file to version control. Add it to `.gitignore` to prevent accidentally exposing your Supabase credentials.
+    </Warning>
+  </Step>
+
+  <Step title="Start the development server">
+    ```bash
+    python app.py
+    ```
+
+    You should see Flask start on port 5000:
+
+    ```
+     * Running on http://127.0.0.1:5000
+     * Debug mode: on
+    ```
+  </Step>
+
+  <Step title="Open the application in your browser">
+    Navigate to [http://localhost:5000](http://localhost:5000). VITACORE checks for an active session and redirects unauthenticated users to the login page at `/auth/login`.
+  </Step>
+
+  <Step title="Log in">
+    Enter your **username** and **password**. VITACORE performs a two-phase login:
+
+    1. Looks up the username in the `hc_profesionales` table to retrieve the associated email address.
+    2. Calls `supabase.auth.sign_in_with_password()` with the email and password.
+
+    On success, your session is populated with your profile and role information and you are redirected to the dashboard.
+
+    <Tip>
+      The first user must be created directly in Supabase Auth and the `hc_profesionales` table, or through the user management interface at `/hc/configuracion/usuarios/` if an admin account already exists.
+    </Tip>
+  </Step>
+</Steps>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Installation details" icon="download" href="/installation">
+    Production setup, Gunicorn, and environment variable reference.
+  </Card>
+  <Card title="Patient management" icon="user-injured" href="/features/patients">
+    Register your first patient and start recording clinical data.
+  </Card>
+  <Card title="Users & roles" icon="users" href="/admin/users-roles">
+    Create additional users and configure role-based permissions.
+  </Card>
+  <Card title="Supabase integration" icon="database" href="/integrations/supabase">
+    Learn how VITACORE connects to Supabase for data and authentication.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

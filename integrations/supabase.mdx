@@ -1,0 +1,162 @@
+---
+title: "Supabase Integration"
+description: "How VITACORE connects to Supabase for database access and authentication."
+---
+
+VITACORE uses [Supabase](https://supabase.com) as its backend infrastructure, combining a **PostgreSQL database** with **Supabase Auth** for identity management. The integration is implemented in `services/supabase_service.py` and consumed throughout every repository in the application.
+
+## Two client types
+
+VITACORE exposes two factory functions that return a configured Supabase client. You choose the right one based on the security context of the operation.
+
+```python
+from supabase import create_client
+from flask import current_app
+
+
+def get_supabase_public():
+    return create_client(
+        current_app.config["SUPABASE_URL"],
+        current_app.config["SUPABASE_ANON_KEY"]
+    )
+
+
+def get_supabase_admin():
+    return create_client(
+        current_app.config["SUPABASE_URL"],
+        current_app.config["SUPABASE_SERVICE_ROLE_KEY"]
+    )
+```
+
+<CardGroup cols={2}>
+  <Card title="get_supabase_public()" icon="user">
+    Uses the **anon key**. Respects Row-Level Security (RLS) policies. Used exclusively in the authentication flow to call `supabase.auth.sign_in_with_password()`.
+  </Card>
+  <Card title="get_supabase_admin()" icon="shield">
+    Uses the **service role key**. Bypasses all RLS policies. Used by every repository for server-side data access where the authenticated user context is already validated by the Flask session.
+  </Card>
+</CardGroup>
+
+<Warning>
+  Never expose `SUPABASE_SERVICE_ROLE_KEY` to the client or commit it to version control. This key bypasses all Row-Level Security policies and grants unrestricted database access.
+</Warning>
+
+## Required environment variables
+
+Add the following variables to your `.env` file at the project root. `config.py` loads them via `python-dotenv`.
+
+```bash
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_ANON_KEY=<your-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+FLASK_SECRET_KEY=<random-secret-for-flask-sessions>
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `SUPABASE_URL` | Yes | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | Yes | Public anon key (safe for client, respects RLS) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service role key (server-only, bypasses RLS) |
+| `FLASK_SECRET_KEY` | Yes | Secret used to sign Flask sessions |
+| `SUPABASE_TABLE_HC_PROFESIONALES` | No | Override the professionals table name (default: `hc_profesionales`) |
+
+## Authentication flow
+
+The login route (`blueprints/auth/routes.py`) follows this sequence:
+
+<Steps>
+  <Step title="Look up the user profile">
+    `auth_repository.obtener_perfil_por_username()` queries the `profiles` table via the admin client to retrieve the user's `id`, `email`, `role_id`, `is_active`, and joined `roles` data.
+  </Step>
+  <Step title="Validate the profile">
+    The route checks that the profile exists, the account is active (`is_active = True`), and the profile has an email address. Any failure produces a flash message and re-renders the login form.
+  </Step>
+  <Step title="Sign in with Supabase Auth">
+    The **public** client calls `supabase.auth.sign_in_with_password()` with the user's email and submitted password. This validates credentials against `auth.users`.
+
+    ```python
+    supabase = get_supabase_public()
+    response = supabase.auth.sign_in_with_password({
+        "email": email,
+        "password": password
+    })
+    ```
+  </Step>
+  <Step title="Persist session data">
+    On success, VITACORE stores two groups of data in the Flask session:
+
+    **User identity** (`session["user"]`):
+    ```python
+    session["user"] = {
+        "id": perfil["id"],
+        "username": perfil["username"],
+        "full_name": perfil.get("full_name") or "",
+        "email": perfil.get("email") or "",
+        "role_id": perfil.get("role_id"),
+        "role": rol_info.get("code", ""),
+        "role_name": rol_info.get("name", ""),
+    }
+    ```
+
+    **Supabase tokens** (for downstream API calls):
+    ```python
+    session["supabase_access_token"] = user_session.access_token
+    session["supabase_refresh_token"] = user_session.refresh_token
+    ```
+  </Step>
+</Steps>
+
+## Database tables used
+
+| Table | Access client | Purpose |
+|---|---|---|
+| `profiles` | Admin | User profiles linked to `auth.users` |
+| `roles` | Admin | Role definitions (`id`, `code`, `name`, `is_active`) |
+| `roles_modulos` | Admin | Permission matrix: which roles can view/create/edit/delete each module |
+| `modulos` | Admin | Application module registry for the permission system |
+| `rutas` | Admin | Flask endpoint registry, populated by the route sync tool |
+| `roles_rutas` | Admin | Route-level permission assignments per role |
+| `hc_profesionales` | Admin | Healthcare professionals (table name configurable via `SUPABASE_TABLE_HC_PROFESIONALES`) |
+| `hc_pacientes` | Admin | Patient records |
+| `hc_evoluciones` | Admin | Clinical evolution notes |
+| `hc_signos_vitales` | Admin | Vital signs records |
+| `hc_sedes` | Admin | Healthcare facility locations |
+| `hc_tipos_documento` | Admin | Document type catalogue |
+| `hc_especialidades` | Admin | Medical speciality catalogue |
+| `hc_consultorios` | Admin | Consultation room registry |
+| `hc_servicios` | Admin | Medical service catalogue |
+| `hc_paises` | Admin | Country catalogue |
+
+## Route sync
+
+The admin blueprint provides a utility endpoint that registers every Flask route in the `rutas` Supabase table. Run it once after deploying a new version to keep the permission system up to date.
+
+```
+GET /admin/sync_rutas
+```
+
+The endpoint iterates `current_app.url_map`, skips static routes, and upserts each one (keyed on `endpoint`) into the `rutas` table:
+
+```python
+for rule in current_app.url_map.iter_rules():
+    endpoint = rule.endpoint
+    ruta = str(rule)
+    metodos = ",".join(sorted(rule.methods - {"HEAD", "OPTIONS"}))
+
+    if endpoint.startswith("static"):
+        continue
+
+    data = {
+        "endpoint": endpoint,
+        "ruta": ruta,
+        "metodos": metodos
+    }
+
+    supabase.table("rutas").upsert(data, on_conflict="endpoint").execute()
+```
+
+The response returns `{ "status": "ok", "rutas_sincronizadas": <count> }`.
+
+<Info>
+  The route sync uses `get_supabase_admin()` so it can write to the `rutas` table regardless of RLS policies. Restrict access to this endpoint in production using network rules or an authentication check.
+</Info>

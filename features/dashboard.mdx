@@ -1,0 +1,71 @@
+---
+title: "Dashboard"
+description: "The main landing page after login — provides an overview of clinical activity and quick access to all modules."
+---
+
+The dashboard is the first screen you see after a successful login. It acts as the hub of the application, giving you a central point from which to navigate to patients, clinical evolutions, vital signs, and administrative modules.
+
+## Route
+
+| Method | Route | Template |
+|--------|-------|----------|
+| `GET` | `/hc/` | `hc/dashboard.html` |
+
+## Authentication requirement
+
+The dashboard route is protected by the `@login_required` decorator:
+
+```python
+@bp_hc_dashboard.route("/")
+@login_required
+def index():
+    return render_template("hc/dashboard.html")
+```
+
+If you are not logged in and attempt to access `/hc/`, the decorator checks `session.get("user")`. If no session is found:
+
+- **Browser requests** — you are redirected to `/auth/login`.
+- **AJAX / JSON requests** — you receive a `401` JSON response with a `redirect` key pointing to `/auth/login`.
+
+## Session data
+
+Once authenticated, the user object is available throughout the session as `session["user"]`. It contains the following keys:
+
+| Key | Description |
+|-----|-------------|
+| `id` | User's unique identifier |
+| `username` | Login username |
+| `full_name` | User's full display name |
+| `email` | User's email address |
+| `role_id` | Numeric role identifier |
+| `role` | Role key used internally (e.g., `admin`, `medico`) |
+| `role_name` | Human-readable role label |
+
+The dashboard template can access these values via the Flask `session` object to personalize the interface — for example, showing the logged-in user's name or filtering content based on their role.
+
+## What the dashboard shows
+
+The dashboard gives clinical staff a quick overview of the system's key areas:
+
+<CardGroup cols={2}>
+  <Card title="Patient records" icon="user-injured">
+    Access the full list of registered patients. Navigate directly to any patient's detail page, evolution history, or vital signs.
+  </Card>
+  <Card title="Recent activity" icon="clock-rotate-left">
+    Review recent clinical evolutions and vital signs entries to stay up to date with ongoing patient care.
+  </Card>
+  <Card title="Quick registration" icon="plus">
+    Jump straight to the new patient form or start recording a consultation without navigating through multiple screens.
+  </Card>
+  <Card title="Administrative access" icon="gear">
+    Users with administrative roles can access configuration, user management, and permissions from the dashboard navigation.
+  </Card>
+</CardGroup>
+
+<Note>
+  Access to specific modules beyond the dashboard is controlled by the role-based permission matrix. See [Roles & Permissions](/admin/permissions) for details on which roles can access each route.
+</Note>
+
+## Navigation structure
+
+The dashboard is registered under the `hc_dashboard` Blueprint with the `/hc` URL prefix. All other clinical modules — patients, evolutions, vital signs — are registered as separate blueprints under the same `/hc` prefix, so the dashboard acts as the logical root of the clinical application.

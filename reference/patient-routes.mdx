@@ -1,0 +1,124 @@
+---
+title: "Patient Routes"
+description: "CRUD and status-toggle routes for the hc_pacientes blueprint."
+---
+
+The `hc_pacientes` blueprint manages patient records. All routes are registered under the `/hc/pacientes` prefix in `blueprints/hc_pacientes/routes.py`. Data access is delegated to `repositories/hc_pacientes_repo.py`, which operates on the `hc_pacientes` Supabase table.
+
+## Route summary
+
+| Method | Path | Description | Notes |
+|---|---|---|---|
+| `GET` | `/hc/pacientes/` | List all patients | Ordered by `apellidos`, then `nombres` |
+| `GET` | `/hc/pacientes/nuevo` | Render create form | Loads document types from `hc_tipos_documento_repo` |
+| `POST` | `/hc/pacientes/crear` | Create a patient | Checks for duplicate `numero_documento` first |
+| `GET` | `/hc/pacientes/editar/<id>` | Render edit form | Returns 404-style redirect if patient not found |
+| `POST` | `/hc/pacientes/actualizar/<id>` | Update a patient | Replaces all editable fields |
+| `POST` | `/hc/pacientes/toggle/<id>` | Toggle active/inactive | Flips `estado` between `ACTIVO` and `INACTIVO` |
+| `GET` | `/hc/pacientes/ver/<id>` | View patient detail | Read-only detail page |
+
+---
+
+## GET /hc/pacientes/
+
+Calls `repo.listar()`, which queries `hc_pacientes` joined with `hc_tipos_documento(nombre)`, ordered alphabetically by last name then first name. Renders `hc/pacientes/index.html` with the full patient list.
+
+---
+
+## GET /hc/pacientes/nuevo
+
+Loads all document types via `repo_doc.listar()` and renders the patient form in `modo="crear"` with `paciente=None`.
+
+---
+
+## POST /hc/pacientes/crear
+
+Creates a new patient record. Before inserting, the route calls `repo.buscar_por_documento(numero_documento)` and aborts with a flash error if a patient with that document number already exists.
+
+### Request parameters
+
+<ParamField body="tipo_documento_id" type="integer" required>
+  Foreign key to the `hc_tipos_documento` table.
+</ParamField>
+
+<ParamField body="numero_documento" type="string" required>
+  The patient's document number. Must be unique across all patients.
+</ParamField>
+
+<ParamField body="nombres" type="string" required>
+  First name(s) of the patient.
+</ParamField>
+
+<ParamField body="apellidos" type="string" required>
+  Last name(s) of the patient.
+</ParamField>
+
+<ParamField body="fecha_nacimiento" type="string">
+  Date of birth in `YYYY-MM-DD` format.
+</ParamField>
+
+<ParamField body="sexo" type="string">
+  Biological sex of the patient (e.g. `M`, `F`).
+</ParamField>
+
+<ParamField body="telefono" type="string">
+  Landline phone number.
+</ParamField>
+
+<ParamField body="celular" type="string">
+  Mobile phone number.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Patient email address.
+</ParamField>
+
+<ParamField body="direccion" type="string">
+  Physical address.
+</ParamField>
+
+<ParamField body="aseguradora" type="string">
+  Health insurance provider name.
+</ParamField>
+
+### Duplicate check
+
+Before writing to the database, the route calls `repo.buscar_por_documento(numero_doc)`. If a matching record is found, it flashes `"Ya existe un paciente con ese documento."` (category `error`) and redirects to the patient list without inserting.
+
+### Redirect behavior
+
+- **Duplicate found** → redirects to `/hc/pacientes/` with flash error
+- **Success** → redirects to `/hc/pacientes/` with flash `"Paciente creado correctamente."`
+
+---
+
+## GET /hc/pacientes/editar/\<id\>
+
+Fetches the patient with `repo.obtener(item_id)`. If not found, flashes `"Paciente no encontrado."` and redirects to the list. On success, renders the patient form in `modo="editar"` with the patient data and available document types.
+
+---
+
+## POST /hc/pacientes/actualizar/\<id\>
+
+Updates all editable fields for the given patient. Accepts the same form fields as the create route (excluding the duplicate check). Calls `repo.actualizar(item_id, data)` and redirects to the patient list with `"Paciente actualizado correctamente."`.
+
+---
+
+## POST /hc/pacientes/toggle/\<id\>
+
+Toggles the `estado` field between `"ACTIVO"` and `"INACTIVO"`.
+
+The route fetches the current patient, computes the new state:
+
+```python
+nuevo_estado = "INACTIVO" if paciente.get("estado") == "ACTIVO" else "ACTIVO"
+repo.cambiar_estado(item_id, nuevo_estado)
+```
+
+If the patient is not found, it flashes `"Paciente no existe."` (category `error`).
+
+---
+
+## GET /hc/pacientes/ver/\<id\>
+
+Retrieves the patient with `repo.obtener(item_id)` and renders the read-only detail template `hc/pacientes/pacientes_detalle.html`. Redirects to the list with a flash error if the patient does not exist.

@@ -1,0 +1,105 @@
+---
+title: "Vital Signs Routes"
+description: "Routes for recording and listing vital signs per patient, including automatic BMI calculation."
+---
+
+The `hc_signos` blueprint manages vital signs records. Routes are registered under `/hc/signos` in `blueprints/hc_signos_vitales/routes.py`. Data access uses `repositories/hc_signos_repo.py`, which operates on the `hc_signos_vitales` Supabase table.
+
+## Route summary
+
+| Method | Path | Description | Notes |
+|---|---|---|---|
+| `GET` | `/hc/signos/paciente/<paciente_id>` | List vital signs for a patient | Ordered by `fecha` descending |
+| `GET` | `/hc/signos/nuevo/<paciente_id>` | Render create form | Scoped to the given patient |
+| `POST` | `/hc/signos/crear/<paciente_id>` | Record a new set of vitals | IMC calculated server-side |
+
+---
+
+## GET /hc/signos/paciente/\<paciente_id\>
+
+Calls `repo.listar_por_paciente(paciente_id)` and renders `hc/signos_vitales/signos_list.html` with all records for that patient, ordered newest first.
+
+---
+
+## GET /hc/signos/nuevo/\<paciente_id\>
+
+Renders the blank vitals form `hc/signos_vitales/signos_form.html` with `paciente_id` injected for the POST URL.
+
+---
+
+## POST /hc/signos/crear/\<paciente_id\>
+
+Records a new vital signs entry for the patient. The route reads `peso` and `talla` from the form, calculates BMI server-side, and stores all measurements.
+
+### BMI (IMC) auto-calculation
+
+The body mass index is computed before insert using the standard formula. Height is converted from centimetres to metres:
+
+```python
+peso = float(request.form.get("peso") or 0)
+talla = float(request.form.get("talla") or 0)
+
+imc = 0
+
+if talla > 0:
+    imc = peso / ((talla / 100) ** 2)
+```
+
+The result is rounded to two decimal places and stored as `imc`. When `talla` is `0`, `imc` defaults to `0` to avoid a division-by-zero error.
+
+### Request parameters
+
+<ParamField body="peso" type="number">
+  Body weight in kilograms. Parsed as `float`; defaults to `0` if blank.
+</ParamField>
+
+<ParamField body="talla" type="number">
+  Height in centimetres. Parsed as `float`; defaults to `0` if blank. Used to compute IMC.
+</ParamField>
+
+<ParamField body="presion_sistolica" type="string">
+  Systolic blood pressure (mmHg).
+</ParamField>
+
+<ParamField body="presion_diastolica" type="string">
+  Diastolic blood pressure (mmHg).
+</ParamField>
+
+<ParamField body="frecuencia_cardiaca" type="string">
+  Heart rate in beats per minute.
+</ParamField>
+
+<ParamField body="frecuencia_respiratoria" type="string">
+  Respiratory rate in breaths per minute.
+</ParamField>
+
+<ParamField body="temperatura" type="string">
+  Body temperature in degrees Celsius.
+</ParamField>
+
+<ParamField body="observaciones" type="string">
+  Free-text clinical observations.
+</ParamField>
+
+### Data written
+
+The route builds and inserts the following payload:
+
+```python
+data = {
+    "paciente_id": paciente_id,
+    "peso": peso,
+    "talla": talla,
+    "imc": round(imc, 2),
+    "presion_sistolica": request.form.get("presion_sistolica"),
+    "presion_diastolica": request.form.get("presion_diastolica"),
+    "frecuencia_cardiaca": request.form.get("frecuencia_cardiaca"),
+    "frecuencia_respiratoria": request.form.get("frecuencia_respiratoria"),
+    "temperatura": request.form.get("temperatura"),
+    "observaciones": request.form.get("observaciones")
+}
+```
+
+### Redirect behavior
+
+- **Success** → redirects to `url_for("hc_signos.signos_paciente", paciente_id=paciente_id)` with flash `"Signos vitales registrados"`

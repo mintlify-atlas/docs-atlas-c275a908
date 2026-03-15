@@ -1,0 +1,162 @@
+---
+title: "Configuration Routes"
+description: "Administrative configuration routes for facilities, catalogues, users, roles, and route sync."
+---
+
+VITACORE's configuration module lives under the `/hc/configuracion` prefix (blueprint `hc_configuracion`) and two additional blueprints: `configuracion_usuarios` (`/hc/configuracion/usuarios`) and `configuracion_roles` (`/hc/configuracion/roles-permisos`). An admin utility route is registered on `bp_admin` under `/admin`.
+
+All configuration routes use the admin Supabase client and require an authenticated session. Role-permission routes additionally require the `@rol_required(usar_matriz=True)` decorator.
+
+---
+
+## Sedes (Facilities)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/sedes` | List all facilities |
+| `GET / POST` | `/hc/configuracion/sedes/nueva` | Create a new facility |
+| `GET / POST` | `/hc/configuracion/sedes/editar/<sede_id>` | Edit an existing facility |
+| `POST` | `/hc/configuracion/sedes/toggle/<sede_id>` | Toggle facility status (`ACTIVA` / `INACTIVA`) |
+
+**Create / edit form fields:** `codigo` (required, unique), `nombre` (required), `ciudad`, `direccion`, `telefono`, `estado`
+
+---
+
+## Tipos de Documento (Document Types)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/tipos-documento` | List all document types |
+| `GET / POST` | `/hc/configuracion/tipos-documento/nuevo` | Create a document type |
+| `GET / POST` | `/hc/configuracion/tipos-documento/editar/<item_id>` | Edit a document type |
+| `POST` | `/hc/configuracion/tipos-documento/toggle/<item_id>` | Toggle status (`ACTIVO` / `INACTIVO`) |
+
+**Form fields:** `codigo` (required, case-insensitive unique), `nombre` (required), `descripcion`, `estado`
+
+---
+
+## Especialidades (Medical Specialities)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/especialidades` | List all specialities |
+| `GET / POST` | `/hc/configuracion/especialidades/nueva` | Create a speciality |
+| `GET / POST` | `/hc/configuracion/especialidades/editar/<item_id>` | Edit a speciality |
+| `POST` | `/hc/configuracion/especialidades/toggle/<item_id>` | Toggle status (`ACTIVA` / `INACTIVA`) |
+
+**Form fields:** `codigo` (required, case-insensitive unique), `nombre` (required), `descripcion`, `estado`
+
+---
+
+## Consultorios (Consultation Rooms)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/consultorios` | List all consultation rooms |
+| `GET / POST` | `/hc/configuracion/consultorios/nuevo` | Create a consultation room |
+| `GET / POST` | `/hc/configuracion/consultorios/editar/<item_id>` | Edit a consultation room |
+| `POST` | `/hc/configuracion/consultorios/toggle/<item_id>` | Toggle status (`ACTIVO` / `INACTIVO`) |
+
+**Form fields:** `sede_id` (required), `codigo` (required, unique), `nombre` (required), `piso`, `descripcion`, `estado`
+
+<Note>
+  When creating or editing a consultation room, the route resolves the `sede_nombre` from the selected `sede_id` and stores it denormalized in the record.
+</Note>
+
+---
+
+## Profesionales (Healthcare Professionals)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/profesionales` | List all professionals |
+| `GET / POST` | `/hc/configuracion/profesionales/nuevo` | Create a professional |
+| `GET / POST` | `/hc/configuracion/profesionales/editar/<item_id>` | Edit a professional |
+| `POST` | `/hc/configuracion/profesionales/toggle/<item_id>` | Toggle status (`ACTIVO` / `INACTIVO`) |
+
+**Form fields:** `tipo_documento_id` (required), `numero_documento` (required), `nombres` (required), `apellidos` (required), `especialidad_id`, `sede_id`, `consultorio_id`, `registro_profesional`, `correo`, `telefono`, `estado`
+
+A duplicate check using `repo_prof.existe_documento(tipo_documento_id, numero_documento)` runs before insert and update.
+
+---
+
+## Servicios (Medical Services)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/servicios` | List all services |
+| `GET` | `/hc/configuracion/servicios/nuevo` | Render create form |
+| `POST` | `/hc/configuracion/servicios/crear` | Create a service |
+| `GET` | `/hc/configuracion/servicios/<id>/editar` | Render edit form |
+| `POST` | `/hc/configuracion/servicios/<id>/actualizar` | Update a service |
+| `POST` | `/hc/configuracion/servicios/toggle/<item_id>` | Toggle status (`ACTIVO` / `INACTIVO`) |
+
+**Form fields:** `codigo`, `nombre`, `especialidad_id` (optional FK to `hc_especialidades`), `descripcion`
+
+---
+
+## Países (Countries)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/paises` | List all countries |
+| `GET / POST` | `/hc/configuracion/paises/nuevo` | Create a country |
+| `GET / POST` | `/hc/configuracion/paises/editar/<item_id>` | Edit a country |
+| `POST` | `/hc/configuracion/paises/toggle/<item_id>` | Toggle status (`ACTIVO` / `INACTIVO`) |
+
+**Form fields:** `codigo_iso2` (required, unique, uppercased), `codigo_iso3` (uppercased), `nombre` (required)
+
+Duplicate ISO2 codes are caught via `repo_paises.obtener_por_iso2()` before insert.
+
+---
+
+## Usuarios (Users)
+
+Managed by the `configuracion_usuarios` blueprint at `/hc/configuracion/usuarios`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/usuarios/` | List all users and render inline create form |
+| `POST` | `/hc/configuracion/usuarios/` | Create a new user with Supabase Auth account |
+| `GET / POST` | `/hc/configuracion/usuarios/<user_id>/editar` | Edit user profile and role |
+| `POST` | `/hc/configuracion/usuarios/<user_id>/estado` | Toggle user `is_active` status |
+
+**Create form fields:** `username`, `full_name`, `email`, `password` (min 6 chars), `role_id`
+
+**Edit form fields:** `username`, `full_name`, `email`, `role_id`, `is_active`
+
+<Info>
+  User creation calls `crear_usuario_con_perfil()`, which first creates the account in Supabase Auth (`auth.admin.create_user`) and then inserts a matching row in the `profiles` table using the returned user UUID.
+</Info>
+
+---
+
+## Roles y Permisos (Roles & Permissions)
+
+Managed by the `configuracion_roles` blueprint at `/hc/configuracion/roles-permisos`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/hc/configuracion/roles-permisos/` | View permission matrix for the selected role |
+| `POST` | `/hc/configuracion/roles-permisos/` | Save updated permissions for the selected role |
+| `POST` | `/hc/configuracion/roles-permisos/crear` | Create a new role |
+
+**Permission matrix fields (per module):** `modulo_ids[]`, `view_{modulo_id}`, `create_{modulo_id}`, `edit_{modulo_id}`, `delete_{modulo_id}`
+
+The save operation deletes the existing `roles_modulos` rows for the role and inserts the new permission set in a single transaction.
+
+**Create role fields:** `code` (lowercase, required), `name` (required)
+
+---
+
+## Admin: Route Sync
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/sync_rutas` | Sync all Flask endpoints to the Supabase `rutas` table |
+
+See [Supabase Integration — Route sync](/integrations/supabase#route-sync) for the full implementation details.
+
+<Warning>
+  The `/admin/sync_rutas` endpoint uses the service role key and has no authentication guard in the default implementation. Protect this endpoint with network-level access controls or add a session check before deploying to production.
+</Warning>

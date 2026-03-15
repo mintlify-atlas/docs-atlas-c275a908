@@ -1,0 +1,97 @@
+---
+title: "Clinical Evolutions"
+description: "Record structured consultation notes per patient, capturing chief complaint, physical exam, diagnosis, and treatment plan."
+---
+
+A clinical evolution is a structured consultation note attached to a specific patient. Each evolution captures the key sections of a medical encounter — from the reason for the visit through the attending physician's treatment plan. Evolutions are stored chronologically (most recent first) and tied to the patient via `paciente_id`.
+
+<Note>
+  Every evolution belongs to exactly one patient. You must navigate to a patient's record before you can create or view their evolutions. The `paciente_id` is embedded in every URL and stored in every evolution row.
+</Note>
+
+## URL routes
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/hc/evoluciones/paciente/<paciente_id>` | List all evolutions for a patient |
+| `GET` | `/hc/evoluciones/nuevo/<paciente_id>` | Show the new evolution form |
+| `POST` | `/hc/evoluciones/crear/<paciente_id>` | Submit and save a new evolution |
+
+## Evolution fields
+
+| Field | Description |
+|-------|-------------|
+| `motivo_consulta` | Chief complaint — the primary reason the patient is seeking care |
+| `enfermedad_actual` | Current illness — narrative description of the presenting problem |
+| `examen_fisico` | Physical examination findings |
+| `impresion_diagnostica` | Diagnostic impression — the clinician's assessment |
+| `plan` | Treatment plan — prescribed actions, medications, or follow-up |
+| `medico` | Attending physician who conducted the consultation |
+
+The repository also stores the following fields automatically:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Auto-generated primary key |
+| `paciente_id` | Foreign key linking the evolution to its patient |
+| `fecha` | Date the evolution was recorded |
+| `estado` | Record status, defaults to `ACTIVO` |
+
+## Recording a consultation
+
+<Steps>
+  <Step title="Open the patient's record">
+    Navigate to `/hc/pacientes/ver/<id>` or go directly to `/hc/evoluciones/paciente/<paciente_id>` to view the patient's evolution history. Evolutions are listed in reverse chronological order.
+  </Step>
+  <Step title="Open the new evolution form">
+    Navigate to `/hc/evoluciones/nuevo/<paciente_id>`. The `paciente_id` is passed to the template so it can be embedded in the form's POST action.
+  </Step>
+  <Step title="Fill in each section">
+    Complete all relevant fields: chief complaint, current illness, physical exam findings, diagnostic impression, and treatment plan. Enter the attending physician's name in the `medico` field.
+  </Step>
+  <Step title="Submit the form">
+    The form POSTs to `/hc/evoluciones/crear/<paciente_id>`. The route builds the payload, calls `repo.crear(data)`, and inserts the record into the `hc_evoluciones` table in Supabase.
+  </Step>
+  <Step title="Confirm and review">
+    On success, a flash message confirms the evolution was saved, and you are redirected back to `/hc/evoluciones/paciente/<paciente_id>` where the new entry appears at the top of the list.
+  </Step>
+</Steps>
+
+## How evolutions are stored
+
+The route builds the data payload directly from the submitted form and passes it to the repository:
+
+```python
+data = {
+    "paciente_id": paciente_id,
+    "motivo_consulta": request.form.get("motivo_consulta"),
+    "enfermedad_actual": request.form.get("enfermedad_actual"),
+    "examen_fisico": request.form.get("examen_fisico"),
+    "impresion_diagnostica": request.form.get("impresion_diagnostica"),
+    "plan": request.form.get("plan"),
+    "medico": request.form.get("medico")
+}
+
+repo.crear(data)
+```
+
+The repository inserts this payload directly into the `hc_evoluciones` table using the Supabase admin client.
+
+## Retrieving evolutions
+
+The `listar_por_paciente` function in `hc_evoluciones_repo` fetches all evolutions for a given patient, ordered by date descending so the most recent consultation appears first:
+
+```python
+response = (
+    _sb()
+    .table("hc_evoluciones")
+    .select("*")
+    .eq("paciente_id", paciente_id)
+    .order("fecha", desc=True)
+    .execute()
+)
+```
+
+<Tip>
+  If a patient has a long history, the most recent evolution is always at the top. Use the date (`fecha`) field to navigate through past consultations.
+</Tip>

@@ -1,0 +1,114 @@
+---
+title: "Patient Management"
+description: "Register, update, and manage patient records with full demographic data, document validation, and active/inactive status control."
+---
+
+The patient management module is the foundation of VITACORE's clinical record system. Every clinical evolution and vital signs record belongs to a patient, so you typically start here before recording any clinical data.
+
+## URL routes
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/hc/pacientes/` | List all patients |
+| `GET` | `/hc/pacientes/nuevo` | Show the create patient form |
+| `POST` | `/hc/pacientes/crear` | Submit and save a new patient |
+| `GET` | `/hc/pacientes/editar/<id>` | Show the edit form for a patient |
+| `POST` | `/hc/pacientes/actualizar/<id>` | Submit updated patient data |
+| `POST` | `/hc/pacientes/toggle/<id>` | Toggle the patient's active/inactive status |
+| `GET` | `/hc/pacientes/ver/<id>` | View a patient's detail page |
+
+## Patient fields
+
+When you create or edit a patient, the following fields are available:
+
+| Field | Description | Required |
+|-------|-------------|----------|
+| `tipo_documento_id` | Document type (e.g., national ID, passport) — loaded from `hc_tipos_documento` | Yes |
+| `numero_documento` | Document number — must be unique across all patients | Yes |
+| `nombres` | First name(s) | Yes |
+| `apellidos` | Last name(s) | Yes |
+| `fecha_nacimiento` | Date of birth | No |
+| `sexo` | Sex | No |
+| `telefono` | Home or office phone number | No |
+| `celular` | Mobile phone number | No |
+| `email` | Email address | No |
+| `direccion` | Home address | No |
+| `aseguradora` | Health insurer / insurance provider | No |
+| `estado` | Patient status — `ACTIVO` or `INACTIVO` (set automatically) | — |
+
+<Info>
+  All text fields are stripped of leading and trailing whitespace before being stored in the database.
+</Info>
+
+## Creating a patient
+
+<Steps>
+  <Step title="Open the patient list">
+    Navigate to `/hc/pacientes/`. You will see a table of all existing patients ordered alphabetically by last name, then first name.
+  </Step>
+  <Step title="Click New Patient">
+    Go to `/hc/pacientes/nuevo`. The form loads all available document types from the `hc_tipos_documento` table so you can select the correct one.
+  </Step>
+  <Step title="Fill in the form">
+    Enter the patient's demographic information. The `numero_documento` field is required and must be unique — the system checks for duplicates before saving.
+  </Step>
+  <Step title="Submit the form">
+    POST to `/hc/pacientes/crear`. If a patient with the same document number already exists, the system displays an error flash message and returns you to the list without creating a duplicate.
+  </Step>
+  <Step title="Confirm creation">
+    On success, you are redirected to `/hc/pacientes/` and a success flash message confirms the record was saved. New patients are created with `estado = ACTIVO` by default.
+  </Step>
+</Steps>
+
+## Duplicate document detection
+
+Before inserting a new patient, the route calls `buscar_por_documento` from the patients repository. This function queries the `hc_pacientes` table filtering by `numero_documento` (exact match, case-sensitive, whitespace stripped). If a match is found, the creation is blocked:
+
+```python
+numero_doc = request.form.get("numero_documento")
+existente = repo.buscar_por_documento(numero_doc)
+
+if existente:
+    flash("Ya existe un paciente con ese documento.", "error")
+    return redirect(url_for("hc_pacientes.pacientes"))
+```
+
+<Warning>
+  Document number uniqueness is enforced at the application layer, not with a database constraint. If you insert records directly into Supabase, you must ensure uniqueness yourself.
+</Warning>
+
+## Editing a patient
+
+Navigate to `/hc/pacientes/editar/<id>`. The form is pre-populated with the patient's current data. When you submit, the route POSTs to `/hc/pacientes/actualizar/<id>` and updates all demographic fields in the `hc_pacientes` table. The `estado` field is **not** updated through this form — use the toggle endpoint instead.
+
+## Active/inactive status toggle
+
+Patients have an `estado` field with two possible values: `ACTIVO` and `INACTIVO`. You can flip the status by submitting a POST request to `/hc/pacientes/toggle/<id>`.
+
+The toggle logic reads the current state and inverts it:
+
+```python
+nuevo_estado = "INACTIVO" if paciente.get("estado") == "ACTIVO" else "ACTIVO"
+repo.cambiar_estado(item_id, nuevo_estado)
+```
+
+A confirmation flash message reports whether the patient was activated or inactivated.
+
+## Patient detail view
+
+Navigate to `/hc/pacientes/ver/<id>` to open a read-only detail page for a single patient. This view renders the `hc/pacientes/pacientes_detalle.html` template and shows all fields stored for that patient. If the ID does not exist in the database, you are redirected to the patient list with an error message.
+
+## Data storage
+
+All patient data is persisted in the `hc_pacientes` table in Supabase via the admin client (`get_supabase_admin`). The `listar` function fetches patients with a join to `hc_tipos_documento` so that the document type name is available in the list view:
+
+```python
+response = (
+    _sb()
+    .table("hc_pacientes")
+    .select("*, hc_tipos_documento(nombre)")
+    .order("apellidos")
+    .order("nombres")
+    .execute()
+)
+```

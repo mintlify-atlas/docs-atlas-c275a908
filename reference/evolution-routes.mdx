@@ -1,0 +1,84 @@
+---
+title: "Clinical Evolution Routes"
+description: "Routes for creating and listing clinical evolution notes per patient."
+---
+
+The `hc_evoluciones` blueprint manages clinical evolution notes — the structured clinical narrative recorded by a physician at each encounter. All routes are registered under `/hc/evoluciones` in `blueprints/hc_evoluciones/routes.py`. Data access uses `repositories/hc_evoluciones_repo.py`, which operates on the `hc_evoluciones` Supabase table.
+
+## Route summary
+
+| Method | Path | Description | Notes |
+|---|---|---|---|
+| `GET` | `/hc/evoluciones/paciente/<paciente_id>` | List evolutions for a patient | Ordered by `fecha` descending |
+| `GET` | `/hc/evoluciones/nuevo/<paciente_id>` | Render create form | Scoped to the given patient |
+| `POST` | `/hc/evoluciones/crear/<paciente_id>` | Create an evolution note | Redirects back to patient's evolution list |
+
+---
+
+## GET /hc/evoluciones/paciente/\<paciente_id\>
+
+Calls `repo.listar_por_paciente(paciente_id)`, which returns all evolution notes for the patient ordered by `fecha` descending. Renders `hc/evoluciones/evoluciones_list.html` with the list and the `paciente_id` for navigation links.
+
+---
+
+## GET /hc/evoluciones/nuevo/\<paciente_id\>
+
+Renders the blank evolution form `hc/evoluciones/evoluciones_form.html`, passing `paciente_id` so the submit URL is correctly scoped to the patient.
+
+---
+
+## POST /hc/evoluciones/crear/\<paciente_id\>
+
+Creates a new evolution note linked to the given patient.
+
+### Request parameters
+
+<ParamField body="motivo_consulta" type="string">
+  Chief complaint or reason for the visit.
+</ParamField>
+
+<ParamField body="enfermedad_actual" type="string">
+  History of present illness — narrative description of the current condition.
+</ParamField>
+
+<ParamField body="examen_fisico" type="string">
+  Physical examination findings.
+</ParamField>
+
+<ParamField body="impresion_diagnostica" type="string">
+  Diagnostic impression or working diagnosis.
+</ParamField>
+
+<ParamField body="plan" type="string">
+  Treatment plan, prescriptions, or follow-up instructions.
+</ParamField>
+
+<ParamField body="medico" type="string">
+  Name or identifier of the attending physician.
+</ParamField>
+
+### Data written
+
+The route builds the following payload before calling `repo.crear(data)`:
+
+```python
+data = {
+    "paciente_id": paciente_id,
+    "motivo_consulta": request.form.get("motivo_consulta"),
+    "enfermedad_actual": request.form.get("enfermedad_actual"),
+    "examen_fisico": request.form.get("examen_fisico"),
+    "impresion_diagnostica": request.form.get("impresion_diagnostica"),
+    "plan": request.form.get("plan"),
+    "medico": request.form.get("medico")
+}
+```
+
+`paciente_id` is taken from the URL path parameter, not the form body.
+
+### Redirect behavior
+
+- **Success** → redirects to `url_for("hc_evoluciones.evoluciones_paciente", paciente_id=paciente_id)` with flash `"Evolución registrada correctamente"`
+
+<Note>
+  There is no server-side validation on individual fields before inserting. If you need mandatory fields, add validation in the form's JavaScript or extend the route before the `repo.crear(data)` call.
+</Note>

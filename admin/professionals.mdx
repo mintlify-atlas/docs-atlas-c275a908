@@ -1,0 +1,137 @@
+---
+title: "Medical Professionals"
+description: "Register, edit, and manage the medical professionals who deliver care in VITACORE."
+---
+
+The Medical Professionals section lets you maintain the roster of healthcare providers. Each professional is linked to a branch (sede), an office (consultorio), and a medical specialty. All routes are under `/hc/configuracion/profesionales`.
+
+---
+
+## Professional fields
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `tipo_documento_id` | FK → tipos_documento | Yes | Document type (e.g., CC, CE, NIT). |
+| `numero_documento` | string | Yes | Document number. Together with `tipo_documento_id` it must be unique. |
+| `nombres` | string | Yes | First name(s). |
+| `apellidos` | string | Yes | Last name(s). |
+| `especialidad_id` | FK → especialidades | No | Medical specialty. |
+| `sede_id` | FK → sedes | No | Branch where the professional works. |
+| `consultorio_id` | FK → consultorios | No | Office assigned to the professional. |
+| `registro_profesional` | string | No | Professional licence or registration number. |
+| `correo` | string | No | Contact email address. |
+| `telefono` | string | No | Contact phone number. |
+| `estado` | string | No | `ACTIVO` or `INACTIVO`. |
+
+---
+
+## Listing professionals
+
+Navigate to `/hc/configuracion/profesionales`. The page calls `repo_prof.listar()` and renders the full list, including each professional's name, document, specialty, branch, and status.
+
+```
+GET /hc/configuracion/profesionales
+```
+
+---
+
+## Creating a professional
+
+<Steps>
+  <Step title="Open the creation form">
+    Go to `/hc/configuracion/profesionales/nuevo` or click **New professional** in the list view.
+
+    ```
+    GET /hc/configuracion/profesionales/nuevo
+    ```
+
+    The form pre-loads dropdowns for document types (`tipos_documento`), specialties (`especialidades`), branches (`sedes`), and offices (`consultorios`).
+  </Step>
+
+  <Step title="Fill in the professional's details">
+    At minimum, provide:
+
+    - **Document type** (`tipo_documento_id`) — select from the dropdown.
+    - **Document number** (`numero_documento`) — must be unique for the chosen document type.
+    - **First names** (`nombres`).
+    - **Last names** (`apellidos`).
+
+    Optionally assign a specialty, branch, office, registration number, email, and phone. Set **Estado** to `ACTIVO` to make the professional immediately available.
+  </Step>
+
+  <Step title="Check for duplicate documents">
+    Before inserting, the route calls:
+
+    ```python
+    repo_prof.existe_documento(
+        data["tipo_documento_id"],
+        data["numero_documento"]
+    )
+    ```
+
+    If a professional with the same document type and number already exists, the form is re-rendered with a warning and no record is created.
+  </Step>
+
+  <Step title="Submit the form">
+    Click **Save**. The route calls `repo_prof.crear(data)` and redirects you to the professional list on success.
+
+    ```
+    POST /hc/configuracion/profesionales/nuevo
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Editing a professional
+
+Navigate to `/hc/configuracion/profesionales/editar/<id>` (or click the edit button in the list).
+
+```
+GET  /hc/configuracion/profesionales/editar/<id>   # Display edit form
+POST /hc/configuracion/profesionales/editar/<id>   # Save changes
+```
+
+All fields are editable. The duplicate-document check runs again on save, but excludes the current record:
+
+```python
+repo_prof.existe_documento(
+    data["tipo_documento_id"],
+    data["numero_documento"],
+    exclude_id=item_id
+)
+```
+
+On success the route calls `repo_prof.actualizar(item_id, data)` and redirects to the list.
+
+---
+
+## Toggling professional status
+
+To activate or deactivate a professional without opening the full edit form:
+
+```
+POST /hc/configuracion/profesionales/toggle/<id>
+```
+
+The route reads the professional's current `estado` and inverts it:
+
+```python
+nuevo_estado = "INACTIVO" if item.get("estado") == "ACTIVO" else "ACTIVO"
+repo_prof.cambiar_estado(item_id, nuevo_estado)
+```
+
+Inactive professionals remain in the database but are excluded from clinical workflows that only show active providers.
+
+---
+
+## Route reference
+
+| Method | URL | Action |
+|---|---|---|
+| `GET` | `/hc/configuracion/profesionales` | List all professionals |
+| `GET` | `/hc/configuracion/profesionales/nuevo` | Display creation form |
+| `POST` | `/hc/configuracion/profesionales/nuevo` | Create a new professional |
+| `GET` | `/hc/configuracion/profesionales/editar/<id>` | Display edit form |
+| `POST` | `/hc/configuracion/profesionales/editar/<id>` | Save changes |
+| `POST` | `/hc/configuracion/profesionales/toggle/<id>` | Toggle active/inactive |

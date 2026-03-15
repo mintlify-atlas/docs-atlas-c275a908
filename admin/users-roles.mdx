@@ -1,0 +1,138 @@
+---
+title: "Users & Roles"
+description: "Create and manage system users, assign roles, and control account status in VITACORE."
+---
+
+The Users & Roles section lets you manage who can log in to VITACORE and what role they hold. All user management routes live under `/hc/configuracion/usuarios/` and require an authenticated session.
+
+## Session data
+
+When a user logs in, the following fields are stored in the Flask session under `session["user"]`:
+
+| Key | Description |
+|---|---|
+| `id` | Supabase Auth UUID for the user |
+| `username` | Lowercase username string |
+| `full_name` | Display name |
+| `email` | Email address (lowercase) |
+| `role_id` | Integer ID of the assigned role |
+| `role` | Role code (lowercase string) |
+| `role_name` | Human-readable role name |
+
+---
+
+## Creating a user
+
+<Steps>
+  <Step title="Navigate to the user list">
+    Go to **Configuration → Users** (`/hc/configuracion/usuarios/`). The page displays the full list of existing users and a form to create a new one.
+  </Step>
+
+  <Step title="Fill in the required fields">
+    Complete every field in the creation form:
+
+    | Field | Notes |
+    |---|---|
+    | `username` | Lowercase alphanumeric identifier. The application calls `.strip().lower()` before saving. |
+    | `full_name` | Display name shown throughout the UI. |
+    | `email` | Must be a valid email address. Stored lowercase. |
+    | `password` | Minimum 6 characters. |
+    | `role_id` | Select from the list of active roles. |
+
+    <Warning>
+      Passwords must be **at least 6 characters** long. Submitting a shorter password returns a validation error and no user is created.
+    </Warning>
+  </Step>
+
+  <Step title="Submit the form">
+    Click **Create user**. The application calls `crear_usuario_con_perfil()`, which:
+
+    1. Creates the account in **Supabase Auth** via `supabase.auth.admin.create_user()` with `email_confirm: True` — the account is immediately confirmed.
+    2. Inserts a matching row in the `profiles` table containing `id`, `username`, `full_name`, `email`, `role_id`, and `is_active: True`.
+
+    On success, a flash message confirms the user was created and you are redirected back to the list.
+  </Step>
+</Steps>
+
+<Note>
+  All fields are required. Leaving any field blank returns a validation warning and no user is created.
+</Note>
+
+---
+
+## Editing a user
+
+Navigate to `/hc/configuracion/usuarios/<id>/editar` (or click the edit button next to a user in the list).
+
+You can modify the following fields:
+
+| Field | Notes |
+|---|---|
+| `username` | Stored lowercase after trimming. |
+| `full_name` | Updated in both `auth.users` metadata and the `profiles` table. |
+| `email` | Updated in both `auth.users` and `profiles`. |
+| `role_id` | Must be a valid integer matching an active role. |
+| `is_active` | Boolean — send `"1"` to activate, any other value to deactivate. |
+
+The route accepts `GET` to display the pre-filled form and `POST` to save changes. On success, you are redirected to the user list.
+
+```
+GET  /hc/configuracion/usuarios/<id>/editar   # Display edit form
+POST /hc/configuracion/usuarios/<id>/editar   # Save changes
+```
+
+---
+
+## Toggling a user active/inactive
+
+To flip a user's active status without opening the full edit form, send a `POST` request to:
+
+```
+POST /hc/configuracion/usuarios/<id>/estado
+```
+
+The route reads the user's current `is_active` value and inverts it:
+
+```python
+nuevo_estado = not bool(usuario.get("is_active"))
+cambiar_estado_usuario(user_id, nuevo_estado)
+```
+
+Only the `is_active` field in the `profiles` table is updated. The Supabase Auth account is not deleted.
+
+---
+
+## Creating a role
+
+Roles are created from the Roles & Permissions page at `/hc/configuracion/roles-permisos/crear` (POST). You need two fields:
+
+| Field | Notes |
+|---|---|
+| `code` | Short lowercase identifier (e.g., `admin`, `medico`). Stripped and lowercased automatically. |
+| `name` | Human-readable label shown in dropdowns and the session. |
+
+The `crear_rol()` repository function inserts a row into the `roles` table with `is_active: True`:
+
+```python
+payload = {
+    "code": (code or "").strip().lower(),
+    "name": (name or "").strip(),
+    "is_active": True,
+}
+supabase.table("roles").insert(payload).execute()
+```
+
+After creation you are redirected to the Roles & Permissions matrix pre-filtered for the new role, so you can immediately configure its permissions.
+
+---
+
+## Route reference
+
+| Method | URL | Action |
+|---|---|---|
+| `GET` | `/hc/configuracion/usuarios/` | List all users + create form |
+| `POST` | `/hc/configuracion/usuarios/` | Create a new user |
+| `GET` | `/hc/configuracion/usuarios/<id>/editar` | Display edit form |
+| `POST` | `/hc/configuracion/usuarios/<id>/editar` | Save user changes |
+| `POST` | `/hc/configuracion/usuarios/<id>/estado` | Toggle active/inactive |
+| `POST` | `/hc/configuracion/roles-permisos/crear` | Create a new role |
